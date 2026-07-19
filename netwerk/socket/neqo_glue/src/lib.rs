@@ -475,6 +475,7 @@ impl NeqoHttp3Conn {
             .max_stream_data(StreamType::BiDi, false, max_stream_data)
             .grease(static_prefs::pref!("security.tls.grease_http3_enable"))
             .sni_slicing(static_prefs::pref!("network.http.http3.sni-slicing"))
+            .scone(static_prefs::pref!("network.webtransport.scone.enabled"))
             .idle_timeout(Duration::from_secs(idle_timeout.into()))
             // Disabled on OpenBSD. See <https://bugzilla.mozilla.org/show_bug.cgi?id=1952304>.
             .pmtud_iface_mtu(cfg!(not(target_os = "openbsd")))
@@ -2080,6 +2081,12 @@ pub enum Http3Event {
     EchFallbackAuthenticationNeeded,
     WebTransport(WebTransportEventExternal),
     ConnectUdp(ConnectUdpEventExternal),
+    /// Updated SCONE throughput advice. The bitrate is in bits per second;
+    /// `known` is false when no current advice is available.
+    SconeUpdated {
+        bitrate: u64,
+        known: bool,
+    },
     NoEvent,
 }
 
@@ -2274,6 +2281,10 @@ pub extern "C" fn neqo_http3conn_event(
             Http3ClientEvent::ConnectUdp(e) => {
                 Http3Event::ConnectUdp(ConnectUdpEventExternal::new(e, data))
             }
+            Http3ClientEvent::SconeUpdated(bitrate) => Http3Event::SconeUpdated {
+                bitrate: bitrate.map_or(0, std::num::NonZeroU64::get),
+                known: bitrate.is_some(),
+            },
         };
 
         if !matches!(fe, Http3Event::NoEvent) {

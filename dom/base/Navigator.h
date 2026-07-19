@@ -183,6 +183,7 @@ class Navigator final : public nsISupports, public nsWrapperCache {
 
   already_AddRefed<LegacyMozTCPSocket> MozTCPSocket();
   network::Connection* GetConnection(ErrorResult& aRv);
+  already_AddRefed<Promise> GetSconeThroughputAdvice(ErrorResult& aRv);
   MediaDevices* GetMediaDevices(ErrorResult& aRv);
   MediaDevices* GetExtantMediaDevices() const { return mMediaDevices; };
 

@@ -4,7 +4,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::{cell::RefCell, collections::VecDeque, rc::Rc};
+use std::{cell::RefCell, collections::VecDeque, num::NonZeroU64, rc::Rc};
 
 use neqo_common::{Bytes, Header, event::Provider as EventProvider, qtrace};
 use neqo_transport::{AppError, StreamId, StreamType};
@@ -130,6 +130,9 @@ pub enum Http3ClientEvent {
     WebTransport(WebTransportEvent),
     /// `ConnectUdp` events
     ConnectUdp(ConnectUdpEvent),
+    /// An update to SCONE throughput advice, in bits per second.
+    /// `None` means that no current advice is available.
+    SconeUpdated(Option<NonZeroU64>),
 }
 
 #[derive(Debug, Default, Clone)]
@@ -350,6 +353,12 @@ impl Http3ClientEvents {
         self.insert(Http3ClientEvent::ZeroRttRejected);
     }
 
+    /// Add a SCONE update, replacing any update that has not been consumed.
+    pub(crate) fn scone_updated(&self, bitrate: Option<NonZeroU64>) {
+        self.remove(|evt| matches!(evt, Http3ClientEvent::SconeUpdated(_)));
+        self.insert(Http3ClientEvent::SconeUpdated(bitrate));
+    }
+
     /// Add a new `GoawayReceived` event.
     pub(crate) fn goaway_received(&self) {
         self.remove(|evt| matches!(evt, Http3ClientEvent::RequestsCreatable));
@@ -454,6 +463,8 @@ impl EventProvider for Http3ClientEvents {
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
+    use std::num::NonZeroU64;
+
     use neqo_common::event::Provider as _;
 
     use super::{Http3ClientEvent, Http3ClientEvents};
@@ -464,5 +475,18 @@ mod tests {
         assert!(!events.has_events());
         events.insert(Http3ClientEvent::GoawayReceived);
         assert!(events.has_events());
+    }
+
+    #[test]
+    fn scone_updates_are_coalesced() {
+        let mut events = Http3ClientEvents::default();
+        events.scone_updated(NonZeroU64::new(100_000));
+        events.scone_updated(NonZeroU64::new(1_000_000));
+
+        assert_eq!(
+            events.next_event(),
+            Some(Http3ClientEvent::SconeUpdated(NonZeroU64::new(1_000_000)))
+        );
+        assert_eq!(events.next_event(), None);
     }
 }

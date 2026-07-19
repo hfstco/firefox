@@ -205,6 +205,13 @@ partial interface Navigator {
   readonly attribute NetworkInformation connection;
 };
 
+// Experimental, non-standard global view of the most recently received
+// SCONE throughput advice.
+partial interface Navigator {
+  [SecureContext, NewObject, Pref="network.webtransport.scone.enabled"]
+  Promise<unsigned long long?> getSconeThroughputAdvice();
+};
+
 // https://dvcs.w3.org/hg/gamepad/raw-file/default/gamepad.html#navigator-interface-extension
 partial interface Navigator {
   [Throws, Pref="dom.gamepad.enabled"]

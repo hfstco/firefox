@@ -7,6 +7,7 @@
 
 #include <functional>
 
+#include "mozilla/Maybe.h"
 #include "mozilla/Mutex.h"
 #include "nsISupportsImpl.h"
 #include "nsTArray.h"
@@ -29,6 +30,7 @@ class WebTransportSessionBase {
   virtual uint64_t GetStreamId() const = 0;
   virtual void CloseSession(uint32_t aStatus, const nsACString& aReason) = 0;
   virtual void GetMaxDatagramSize() = 0;
+  virtual Maybe<uint64_t> GetSconeThroughputAdvice() const { return Nothing(); }
   virtual void SendDatagram(nsTArray<uint8_t>&& aData,
                             uint64_t aTrackingId) = 0;
   virtual void CreateOutgoingBidirectionalStream(

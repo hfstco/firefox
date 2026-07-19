@@ -198,6 +198,8 @@ child:
     returns (HttpRetParams[] params);
   async GetHttp3ConnectionStatsData()
     returns (Http3ConnectionStatsParams[] params);
+  async GetSconeThroughputAdvice()
+    returns (uint64_t? bitrate);
 
   async InitProxyAutoConfigChild(Endpoint<PProxyAutoConfigChild> endpoint);
 

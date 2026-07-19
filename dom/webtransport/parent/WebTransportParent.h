@@ -61,6 +61,9 @@ class WebTransportParent : public PWebTransportParent,
   ::mozilla::ipc::IPCResult RecvGetHttpChannelID(
       GetHttpChannelIDResolver&& aResolver);
 
+  ::mozilla::ipc::IPCResult RecvGetSconeThroughputAdvice(
+      GetSconeThroughputAdviceResolver&& aResolver);
+
   void ActorDestroy(ActorDestroyReason aWhy) override;
 
   class OnResetOrStopSendingCallback final {

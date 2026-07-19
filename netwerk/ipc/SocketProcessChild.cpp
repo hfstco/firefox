@@ -39,6 +39,7 @@
 #include "mozilla/net/DNSRequestParent.h"
 #include "mozilla/net/NativeDNSResolverOverrideChild.h"
 #include "mozilla/net/ProxyAutoConfigChild.h"
+#include "mozilla/net/SconeService.h"
 #include "mozilla/net/SocketProcessBackgroundChild.h"
 #include "mozilla/net/TRRServiceChild.h"
 #include "nsDebugImpl.h"
@@ -724,6 +725,12 @@ mozilla::ipc::IPCResult SocketProcessChild::RecvGetHttp3ConnectionStatsData(
             resolver->OnResolve(std::move(data));
           }),
       NS_DISPATCH_NORMAL);
+  return IPC_OK();
+}
+
+mozilla::ipc::IPCResult SocketProcessChild::RecvGetSconeThroughputAdvice(
+    GetSconeThroughputAdviceResolver&& aResolve) {
+  aResolve(GetGlobalSconeThroughputAdvice());
   return IPC_OK();
 }
 

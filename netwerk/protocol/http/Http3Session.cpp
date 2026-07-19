@@ -25,6 +25,7 @@
 #include "mozilla/glean/NetwerkMetrics.h"
 #include "mozilla/glean/NetwerkProtocolHttpMetrics.h"
 #include "mozilla/net/DNS.h"
+#include "mozilla/net/SconeService.h"
 #include "nsHttpConnectionMgr.h"
 #include "nsHttpHandler.h"
 #include "nsHttpTransaction.h"
@@ -1133,6 +1134,17 @@ nsresult Http3Session::ProcessEvents() {
             break;
         }
       } break;
+      case Http3Event::Tag::SconeUpdated:
+        if (event.scone_updated.known) {
+          mSconeThroughputAdvice = Some(event.scone_updated.bitrate);
+        } else {
+          mSconeThroughputAdvice.reset();
+        }
+        SetGlobalSconeThroughputAdvice(mSconeThroughputAdvice);
+        LOG(("Http3Session::ProcessEvents - SCONE throughput advice=%" PRIu64
+             " known=%d",
+             event.scone_updated.bitrate, event.scone_updated.known));
+        break;
       default:
         break;
     }

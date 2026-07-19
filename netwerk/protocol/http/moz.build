@@ -81,6 +81,7 @@ EXPORTS.mozilla.net += [
     "ParentChannelListener.h",
     "PHttpChannelParams.h",
     "ReplacedHttpResponse.h",
+    "SconeService.h",
     "SpeculativeTransaction.h",
     "TimingStruct.h",
 ]
@@ -180,6 +181,7 @@ UNIFIED_SOURCES += [
     "PendingTransactionQueue.cpp",
     "QuicSocketControl.cpp",
     "ReplacedHttpResponse.cpp",
+    "SconeService.cpp",
     "SpeculativeTransaction.cpp",
     "TlsHandshaker.cpp",
     "TLSTransportLayer.cpp",

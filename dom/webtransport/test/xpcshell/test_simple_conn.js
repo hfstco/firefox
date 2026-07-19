@@ -19,6 +19,7 @@ const dns = Services.dns;
 registerCleanupFunction(async () => {
   Services.prefs.clearUserPref("network.dns.localDomains");
   Services.prefs.clearUserPref("network.webtransport.redirect.enabled");
+  Services.prefs.clearUserPref("network.webtransport.scone.enabled");
 });
 
 var { NetUtil } = ChromeUtils.importESModule(
@@ -47,6 +48,7 @@ function addCertFromFile(certdb, filename, trustString) {
 add_setup(async function setup() {
   Services.prefs.setCharPref("network.dns.localDomains", "foo.example.com");
   Services.prefs.setBoolPref("network.webtransport.redirect.enabled", true);
+  Services.prefs.setBoolPref("network.webtransport.scone.enabled", true);
 
   h3Port = Services.env.get("MOZHTTP3_PORT");
   Assert.notEqual(h3Port, null);
@@ -68,6 +70,17 @@ add_setup(async function setup() {
 add_task(async function test_webtransport_create() {
   const wt = newWebTransport("https://" + host + "/success");
   await wt.ready;
+  wt.close();
+});
+
+add_task(async function test_scone_throughput_advice_unavailable() {
+  const wt = newWebTransport("https://" + host + "/success");
+  await wt.ready;
+  Assert.equal(await wt.getSconeThroughputAdvice(), null);
+  Assert.equal(
+    await webTransportWindow().navigator.getSconeThroughputAdvice(),
+    null
+  );
   wt.close();
 });
 

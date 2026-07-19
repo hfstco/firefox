@@ -2398,6 +2398,11 @@
   value: false
   mirror: always
 
+- name: content.cors.allow_all
+  type: bool
+  value: false
+  mirror: always
+
 # If true, we'll use the triggering principal rather than the loading principal
 # when doing CORS checks.  Doing so is generally not correct, but we shipped
 # with this behavior for a long time, so we're leaving it preffable in case
@@ -17095,6 +17100,14 @@
   type: RelaxedAtomicBool
   value: true
   mirror: always
+
+# Enable SCONE throughput advice for HTTP/3 WebTransport connections and
+# expose the experimental WebTransport.getSconeThroughputAdvice() API.
+- name: network.webtransport.scone.enabled
+  type: RelaxedAtomicBool
+  value: false
+  mirror: always
+  rust: true
 
 # WebTransport Redirect support
 - name: network.webtransport.redirect.enabled
