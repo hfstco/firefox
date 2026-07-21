@@ -738,18 +738,6 @@ WebTransportParent::OnIncomingBidirectionalStreamAvailable(
   return IPC_OK();
 }
 
-::mozilla::ipc::IPCResult WebTransportParent::RecvGetSconeThroughputAdvice(
-    GetSconeThroughputAdviceResolver&& aResolver) {
-  MOZ_ASSERT(mSocketThread->IsOnCurrentThread());
-  MOZ_ASSERT(mWebTransport);
-
-  bool known = false;
-  uint64_t bitrate = 0;
-  nsresult rv = mWebTransport->GetSconeThroughputAdvice(&known, &bitrate);
-  aResolver(NS_SUCCEEDED(rv) && known ? Some(bitrate) : Nothing());
-  return IPC_OK();
-}
-
 // The promise sent in this request will be resolved
 // in OnOutgoingDatagramOutCome which is called synchronously from
 // WebTransportSessionProxy::SendDatagram

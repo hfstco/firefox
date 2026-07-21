@@ -533,29 +533,6 @@ already_AddRefed<Promise> WebTransport::GetStats(ErrorResult& aError) {
   return nullptr;
 }
 
-already_AddRefed<Promise> WebTransport::GetSconeThroughputAdvice(
-    ErrorResult& aError) {
-  RefPtr<Promise> promise = Promise::CreateInfallible(GetParentObject());
-  if (mState != WebTransportState::CONNECTED || !mChild) {
-    promise->MaybeRejectWithInvalidStateError("WebTransport is not connected");
-    return promise.forget();
-  }
-
-  mChild->SendGetSconeThroughputAdvice()->Then(
-      GetCurrentSerialEventTarget(), __func__,
-      [promise](Maybe<uint64_t>&& aAdvice) {
-        Nullable<uint64_t> result;
-        if (aAdvice) {
-          result.SetValue(aAdvice.value());
-        }
-        promise->MaybeResolve(result);
-      },
-      [promise](const mozilla::ipc::ResponseRejectReason&) {
-        promise->MaybeReject(NS_ERROR_DOM_NETWORK_ERR);
-      });
-  return promise.forget();
-}
-
 WebTransportReliabilityMode WebTransport::Reliability() { return mReliability; }
 
 WebTransportCongestionControl WebTransport::CongestionControl() {

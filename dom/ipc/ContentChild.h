@@ -449,6 +449,8 @@ class ContentChild final : public PContentChild,
       nsTArray<ScreenDetails>&& aScreens);
 
   mozilla::ipc::IPCResult RecvNetworkLinkTypeChange(const uint32_t& aType);
+  mozilla::ipc::IPCResult RecvSconeThroughputAdviceChanged(
+      const Maybe<uint64_t>& aAdvice);
   uint32_t NetworkLinkType() const { return mNetworkLinkType; }
 
   mozilla::ipc::IPCResult RecvSocketProcessCrashed();

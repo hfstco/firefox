@@ -915,6 +915,7 @@ WEBIDL_FILES = [
     "ResizeObserver.webidl",
     "Response.webidl",
     "Sanitizer.webidl",
+    "Scone.webidl",
     "Screen.webidl",
     "ScreenOrientation.webidl",
     "ScriptProcessorNode.webidl",

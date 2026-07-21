@@ -94,13 +94,12 @@
 #include "mozilla/dom/Promise.h"
 #include "mozilla/dom/WorkerPrivate.h"
 #include "mozilla/dom/WorkerRunnable.h"
+#include "mozilla/dom/network/Scone.h"
 #include "mozilla/ipc/URIUtils.h"
-#include "mozilla/net/SconeService.h"
-#include "mozilla/net/SocketProcessParent.h"
 #include "nsIDocShell.h"
 #include "nsIExternalProtocolHandler.h"
-#include "nsIScriptError.h"
 #include "nsIOService.h"
+#include "nsIScriptError.h"
 #include "nsIUploadChannel2.h"
 #include "nsJSUtils.h"
 #include "nsStreamUtils.h"
@@ -151,6 +150,7 @@ NS_IMPL_CYCLE_COLLECTION_TRAVERSE_BEGIN(Navigator)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mBatteryManager)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mBatteryPromise)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mConnection)
+  NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mScone)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mStorageManager)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mCredentials)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mMediaDevices)
@@ -211,6 +211,11 @@ void Navigator::Invalidate() {
   if (mConnection) {
     mConnection->Shutdown();
     mConnection = nullptr;
+  }
+
+  if (mScone) {
+    mScone->Shutdown();
+    mScone = nullptr;
   }
 
   mMediaDevices = nullptr;
@@ -1929,56 +1934,15 @@ network::Connection* Navigator::GetConnection(ErrorResult& aRv) {
   return mConnection;
 }
 
-already_AddRefed<Promise> Navigator::GetSconeThroughputAdvice(
-    ErrorResult& aRv) {
-  if (!mWindow) {
-    aRv.Throw(NS_ERROR_UNEXPECTED);
-    return nullptr;
-  }
-
-  RefPtr<Promise> promise = Promise::Create(mWindow->AsGlobal(), aRv);
-  if (aRv.Failed()) {
-    return nullptr;
-  }
-
-  auto resolve = [promise](Maybe<uint64_t> aAdvice) {
-    Nullable<uint64_t> result;
-    if (aAdvice) {
-      result.SetValue(aAdvice.value());
+network::Scone* Navigator::GetScone(ErrorResult& aRv) {
+  if (!mScone) {
+    if (!mWindow) {
+      aRv.Throw(NS_ERROR_UNEXPECTED);
+      return nullptr;
     }
-    promise->MaybeResolve(result);
-  };
-  auto reject = [promise](mozilla::ipc::ResponseRejectReason) {
-    promise->MaybeReject(NS_ERROR_DOM_NETWORK_ERR);
-  };
-
-  if (XRE_IsContentProcess()) {
-    ContentChild* contentChild = ContentChild::GetSingleton();
-    if (!contentChild) {
-      promise->MaybeReject(NS_ERROR_DOM_NETWORK_ERR);
-      return promise.forget();
-    }
-    contentChild->SendGetSconeThroughputAdvice()->Then(
-        GetCurrentSerialEventTarget(), __func__, std::move(resolve),
-        std::move(reject));
-    return promise.forget();
+    mScone = new network::Scone(mWindow);
   }
-
-  if (net::nsIOService::UseSocketProcess()) {
-    RefPtr<net::SocketProcessParent> socketParent =
-        net::SocketProcessParent::GetSingleton();
-    if (!socketParent) {
-      promise->MaybeReject(NS_ERROR_DOM_NETWORK_ERR);
-      return promise.forget();
-    }
-    socketParent->SendGetSconeThroughputAdvice()->Then(
-        GetCurrentSerialEventTarget(), __func__, std::move(resolve),
-        std::move(reject));
-    return promise.forget();
-  }
-
-  resolve(net::GetGlobalSconeThroughputAdvice());
-  return promise.forget();
+  return mScone;
 }
 
 already_AddRefed<ServiceWorkerContainer> Navigator::ServiceWorker() {

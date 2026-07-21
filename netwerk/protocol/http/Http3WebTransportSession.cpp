@@ -506,11 +506,6 @@ void Http3WebTransportSession::GetMaxDatagramSize() {
   listener->OnMaxDatagramSize(size);
 }
 
-Maybe<uint64_t> Http3WebTransportSession::GetSconeThroughputAdvice() const {
-  MOZ_ASSERT(OnSocketThread(), "not on socket thread");
-  return mSession ? mSession->GetSconeThroughputAdvice() : Nothing();
-}
-
 void Http3WebTransportSession::OnOutgoingDatagramOutCome(
     uint64_t aId, WebTransportSessionEventListener::DatagramOutcome aOutCome) {
   MOZ_ASSERT(OnSocketThread(), "not on socket thread");

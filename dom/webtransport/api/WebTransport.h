@@ -99,7 +99,6 @@ class WebTransport final : public nsISupports, public nsWrapperCache {
       const WebTransportOptions& aOptions, ErrorResult& aError);
 
   already_AddRefed<Promise> GetStats(ErrorResult& aError);
-  already_AddRefed<Promise> GetSconeThroughputAdvice(ErrorResult& aError);
 
   already_AddRefed<Promise> Ready() { return do_AddRef(mReady); }
   WebTransportReliabilityMode Reliability();

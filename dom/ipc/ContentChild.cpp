@@ -113,6 +113,7 @@
 #include "mozilla/layers/CompositorManagerChild.h"
 #include "mozilla/layers/ContentProcessController.h"
 #include "mozilla/layers/ImageBridgeChild.h"
+#include "mozilla/net/SconeService.h"
 #include "nsNSSComponent.h"
 #include "nsXPLookAndFeel.h"
 #ifdef NS_PRINTING
@@ -2057,6 +2058,12 @@ mozilla::ipc::IPCResult ContentChild::RecvNetworkLinkTypeChange(
     obs->NotifyObservers(nullptr, "contentchild:network-link-type-changed",
                          nullptr);
   }
+  return IPC_OK();
+}
+
+mozilla::ipc::IPCResult ContentChild::RecvSconeThroughputAdviceChanged(
+    const Maybe<uint64_t>& aAdvice) {
+  net::SetGlobalSconeThroughputAdvice(aAdvice);
   return IPC_OK();
 }
 

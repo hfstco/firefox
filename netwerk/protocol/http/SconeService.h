@@ -11,6 +11,9 @@
 
 namespace mozilla::net {
 
+inline constexpr char kSconeThroughputAdviceChangedTopic[] =
+    "network:scone-throughput-advice-changed";
+
 // Stores the most recently received SCONE throughput advice in this process.
 void SetGlobalSconeThroughputAdvice(Maybe<uint64_t> aAdvice);
 Maybe<uint64_t> GetGlobalSconeThroughputAdvice();

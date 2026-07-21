@@ -4,7 +4,12 @@
 
 #include "mozilla/net/SconeService.h"
 
+#include "mozilla/Services.h"
 #include "mozilla/StaticMutex.h"
+#include "mozilla/net/SocketProcessChild.h"
+#include "nsIObserverService.h"
+#include "nsIXULRuntime.h"
+#include "nsThreadUtils.h"
 
 namespace mozilla::net {
 
@@ -12,8 +17,36 @@ static StaticMutex sSconeMutex;
 static Maybe<uint64_t> sSconeThroughputAdvice MOZ_GUARDED_BY(sSconeMutex);
 
 void SetGlobalSconeThroughputAdvice(Maybe<uint64_t> aAdvice) {
-  StaticMutexAutoLock lock(sSconeMutex);
-  sSconeThroughputAdvice = aAdvice;
+  {
+    StaticMutexAutoLock lock(sSconeMutex);
+    if (sSconeThroughputAdvice == aAdvice) {
+      return;
+    }
+    sSconeThroughputAdvice = aAdvice;
+  }
+
+  auto notify = [aAdvice]() {
+    if (XRE_IsSocketProcess()) {
+      if (SocketProcessChild* child = SocketProcessChild::GetSingleton()) {
+        (void)child->SendSconeThroughputAdviceChanged(aAdvice);
+      }
+      return;
+    }
+
+    nsCOMPtr<nsIObserverService> observerService =
+        mozilla::services::GetObserverService();
+    if (observerService) {
+      observerService->NotifyObservers(
+          nullptr, kSconeThroughputAdviceChangedTopic, nullptr);
+    }
+  };
+
+  if (NS_IsMainThread()) {
+    notify();
+  } else {
+    NS_DispatchToMainThread(NS_NewRunnableFunction(
+        "SetGlobalSconeThroughputAdvice", std::move(notify)));
+  }
 }
 
 Maybe<uint64_t> GetGlobalSconeThroughputAdvice() {

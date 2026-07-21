@@ -21,6 +21,7 @@
 #include "mozilla/glean/NetwerkMetrics.h"
 #include "mozilla/net/DNSRequestParent.h"
 #include "mozilla/net/ProxyConfigLookupParent.h"
+#include "mozilla/net/SconeService.h"
 #include "mozilla/net/SocketProcessBackgroundParent.h"
 #include "mozilla/net/neqo_glue_ffi_generated.h"
 #include "nsHttpConnectionInfo.h"
@@ -69,6 +70,12 @@ SocketProcessParent::~SocketProcessParent() {
 already_AddRefed<SocketProcessParent> SocketProcessParent::GetSingleton() {
   RefPtr<SocketProcessParent> parent(sSocketProcessParent);
   return parent.forget();
+}
+
+mozilla::ipc::IPCResult SocketProcessParent::RecvSconeThroughputAdviceChanged(
+    const Maybe<uint64_t>& aAdvice) {
+  SetGlobalSconeThroughputAdvice(aAdvice);
+  return IPC_OK();
 }
 
 void SocketProcessParent::ActorDestroy(ActorDestroyReason aWhy) {

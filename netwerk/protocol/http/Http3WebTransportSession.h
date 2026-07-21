@@ -113,7 +113,6 @@ class Http3WebTransportSession final : public WebTransportSessionBase,
   void OnDatagramReceived(nsTArray<uint8_t>&& aData) override;
 
   void GetMaxDatagramSize() override;
-  Maybe<uint64_t> GetSconeThroughputAdvice() const override;
 
   void OnOutgoingDatagramOutCome(
       uint64_t aId, WebTransportSessionEventListener::DatagramOutcome aOutCome);

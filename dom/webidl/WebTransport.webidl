@@ -71,10 +71,6 @@ interface WebTransport {
 
   [NewObject]
   Promise<WebTransportStats> getStats();
-  // Experimental, non-standard API. SCONE is defined by
-  // https://datatracker.ietf.org/doc/draft-ietf-scone-protocol/.
-  [Pref="network.webtransport.scone.enabled", NewObject]
-  Promise<unsigned long long?> getSconeThroughputAdvice();
   readonly attribute Promise<undefined> ready;
   readonly attribute WebTransportReliabilityMode reliability;
   readonly attribute WebTransportCongestionControl congestionControl;

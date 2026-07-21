@@ -153,7 +153,6 @@ class Http3SessionBase {
   virtual void SendDatagram(Http3WebTransportSession* aSession,
                             nsTArray<uint8_t>& aData, uint64_t aTrackingId) = 0;
   virtual uint64_t MaxDatagramSize(uint64_t aSessionId) = 0;
-  virtual Maybe<uint64_t> GetSconeThroughputAdvice() const { return Nothing(); }
   virtual nsresult TryActivatingWebTransportStream(
       uint64_t* aStreamId, Http3StreamBase* aStream) = 0;
   virtual void ResetWebTransportStream(Http3WebTransportStream* aStream,
@@ -288,10 +287,6 @@ class Http3Session final : public Http3SessionBase,
                         uint64_t aTrackingId) override;
 
   uint64_t MaxDatagramSize(uint64_t aSessionId) override;
-
-  Maybe<uint64_t> GetSconeThroughputAdvice() const override {
-    return mSconeThroughputAdvice;
-  }
 
   void SetSendOrder(Http3StreamBase* aStream,
                     Maybe<int64_t> aSendOrder) override;

@@ -185,7 +185,6 @@
 #include "nsCRT.h"
 #include "nsChromeRegistryChrome.h"
 #include "nsComponentManagerUtils.h"
-#include "nsIOService.h"
 #include "nsConsoleMessage.h"
 #include "nsConsoleService.h"
 #include "nsContentPermissionHelper.h"
@@ -224,6 +223,7 @@
 #include "nsIMemoryInfoDumper.h"
 #include "nsIMemoryReporter.h"
 #include "nsINetworkLinkService.h"
+#include "nsIOService.h"
 #include "nsIObserverService.h"
 #include "nsIParentChannel.h"
 #include "nsIPrivateAttributionService.h"
@@ -638,6 +638,7 @@ static const char* sObserverTopics[] = {
     "cookie-changed",
     "private-cookie-changed",
     NS_NETWORK_LINK_TYPE_TOPIC,
+    net::kSconeThroughputAdviceChangedTopic,
     NS_NETWORK_TRR_MODE_CHANGED_TOPIC,
     "network:socket-process-crashed",
     DEFAULT_TIMEZONE_CHANGED_OBSERVER_TOPIC,
@@ -4124,6 +4125,9 @@ ContentParent::Observe(nsISupports* aSubject, const char* aTopic,
 
   } else if (!strcmp(aTopic, NS_NETWORK_LINK_TYPE_TOPIC)) {
     UpdateNetworkLinkType();
+  } else if (!strcmp(aTopic, net::kSconeThroughputAdviceChangedTopic)) {
+    (void)SendSconeThroughputAdviceChanged(
+        net::GetGlobalSconeThroughputAdvice());
   } else if (!strcmp(aTopic, "network:socket-process-crashed")) {
     (void)SendSocketProcessCrashed();
   } else if (!strcmp(aTopic, DEFAULT_TIMEZONE_CHANGED_OBSERVER_TOPIC)) {

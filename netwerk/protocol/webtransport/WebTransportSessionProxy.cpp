@@ -602,27 +602,6 @@ WebTransportSessionProxy::GetHttpChannelID(uint64_t* _retval) {
   return NS_OK;
 }
 
-NS_IMETHODIMP
-WebTransportSessionProxy::GetSconeThroughputAdvice(bool* aKnown,
-                                                   uint64_t* aBitrate) {
-  NS_ENSURE_ARG_POINTER(aKnown);
-  NS_ENSURE_ARG_POINTER(aBitrate);
-
-  RefPtr<WebTransportSessionBase> session;
-  {
-    MutexAutoLock lock(mMutex);
-    if (mState == WebTransportSessionProxyState::ACTIVE) {
-      session = mWebTransportSession;
-    }
-  }
-
-  Maybe<uint64_t> advice =
-      session ? session->GetSconeThroughputAdvice() : Nothing();
-  *aKnown = advice.isSome();
-  *aBitrate = advice.valueOr(0);
-  return NS_OK;
-}
-
 //-----------------------------------------------------------------------------
 // WebTransportSessionProxy::nsIStreamListener
 //-----------------------------------------------------------------------------
