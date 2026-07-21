@@ -17105,7 +17105,7 @@
 # expose the experimental WebTransport.getSconeThroughputAdvice() API.
 - name: network.webtransport.scone.enabled
   type: RelaxedAtomicBool
-  value: false
+  value: true
   mirror: always
   rust: true
 
