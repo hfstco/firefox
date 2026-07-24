@@ -17102,7 +17102,7 @@
   mirror: always
 
 # Enable SCONE throughput advice for HTTP/3 connections and expose the
-# experimental navigator.scone API.
+# experimental Response.scone API.
 - name: network.webtransport.scone.enabled
   type: RelaxedAtomicBool
   value: true

@@ -73,14 +73,12 @@ add_task(async function test_webtransport_create() {
   wt.close();
 });
 
-add_task(async function test_navigator_scone_throughput_advice_unavailable() {
-  const wt = newWebTransport("https://" + host + "/success");
-  await wt.ready;
-  const { navigator, EventTarget } = webTransportWindow();
-  Assert.ok(navigator.scone instanceof EventTarget);
-  Assert.equal(navigator.scone, navigator.scone);
-  Assert.equal(navigator.scone.throughputAdvice, null);
-  wt.close();
+add_task(async function test_response_scone_throughput_advice_unavailable() {
+  const win = webTransportWindow();
+  const response = await win.fetch("https://" + host + "/10");
+  Assert.ok(win.EventTarget.isInstance(response.scone));
+  Assert.equal(response.scone, response.scone);
+  Assert.equal(response.scone.throughputAdvice, null);
 });
 
 add_task(async function test_redirect_wt() {

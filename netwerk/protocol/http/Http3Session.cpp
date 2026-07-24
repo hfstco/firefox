@@ -73,7 +73,8 @@ NS_INTERFACE_MAP_BEGIN(Http3Session)
   NS_INTERFACE_MAP_ENTRY_CONCRETE(Http3Session)
 NS_INTERFACE_MAP_END
 
-Http3Session::Http3Session() {
+Http3Session::Http3Session()
+    : mSconeConnectionId(RandomUint64OrDie() & INT64_MAX) {
   MOZ_ASSERT(OnSocketThread(), "not on socket thread");
   LOG(("Http3Session::Http3Session [this=%p]", this));
 
@@ -1140,7 +1141,7 @@ nsresult Http3Session::ProcessEvents() {
         } else {
           mSconeThroughputAdvice.reset();
         }
-        SetGlobalSconeThroughputAdvice(mSconeThroughputAdvice);
+        SetSconeThroughputAdvice(mSconeConnectionId, mSconeThroughputAdvice);
         LOG(("Http3Session::ProcessEvents - SCONE throughput advice=%" PRIu64
              " known=%d",
              event.scone_updated.bitrate, event.scone_updated.known));
@@ -2169,6 +2170,7 @@ void Http3Session::CloseInternal(bool aCallNeqoClose) {
   }
 
   LOG(("Http3Session::Closing [this=%p]", this));
+  SetSconeThroughputAdvice(mSconeConnectionId, Nothing());
 
   // A clean pre-CONNECTED shutdown closes with a success code; only flag a
   // before-connected error when mError actually failed.
@@ -2261,6 +2263,13 @@ already_AddRefed<HttpConnectionBase> Http3Session::HttpConnection() {
     return mConnection->HttpConnection();
   }
   return nullptr;
+}
+
+void Http3Session::GetSconeConnectionInfo(Maybe<uint64_t>& aConnectionId,
+                                          Maybe<uint64_t>& aThroughputAdvice) {
+  MOZ_ASSERT(OnSocketThread(), "not on socket thread");
+  aConnectionId = Some(mSconeConnectionId);
+  aThroughputAdvice = mSconeThroughputAdvice;
 }
 
 void Http3Session::CloseTransaction(nsAHttpTransaction* aTransaction,

@@ -21,7 +21,8 @@ class Scone final : public DOMEventTargetHelper,
   NS_DECL_CYCLE_COLLECTION_CLASS_INHERITED(Scone, DOMEventTargetHelper)
   NS_DECL_NSIOBSERVER
 
-  explicit Scone(nsPIDOMWindowInner* aWindow);
+  Scone(nsPIDOMWindowInner* aWindow, uint64_t aConnectionId,
+        Maybe<uint64_t> aThroughputAdvice);
 
   JSObject* WrapObject(JSContext* aCx,
                        JS::Handle<JSObject*> aGivenProto) override;
@@ -36,9 +37,9 @@ class Scone final : public DOMEventTargetHelper,
  private:
   ~Scone();
 
-  void RequestCurrentAdvice();
   void Update(Maybe<uint64_t> aAdvice, bool aNotify);
 
+  const uint64_t mConnectionId;
   Maybe<uint64_t> mThroughputAdvice;
   bool mShutdown = false;
 };

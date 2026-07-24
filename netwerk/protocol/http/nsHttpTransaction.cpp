@@ -484,7 +484,8 @@ void nsHttpTransaction::SetH2WSConnRefTaken() {
 }
 
 UniquePtr<nsHttpResponseHead> nsHttpTransaction::TakeResponseHeadAndConnInfo(
-    nsHttpConnectionInfo** aOut) {
+    nsHttpConnectionInfo** aOut, Maybe<uint64_t>* aSconeConnectionId,
+    Maybe<uint64_t>* aSconeThroughputAdvice) {
   MOZ_ASSERT(!mResponseHeadTaken, "TakeResponseHead called 2x");
 
   // Lock TakeResponseHead() against main thread
@@ -493,6 +494,12 @@ UniquePtr<nsHttpResponseHead> nsHttpTransaction::TakeResponseHeadAndConnInfo(
   if (aOut) {
     RefPtr<nsHttpConnectionInfo> connInfo = mFinalizedConnInfo;
     connInfo.forget(aOut);
+  }
+  if (aSconeConnectionId) {
+    *aSconeConnectionId = mSconeConnectionId;
+  }
+  if (aSconeThroughputAdvice) {
+    *aSconeThroughputAdvice = mSconeThroughputAdvice;
   }
 
   mResponseHeadTaken = true;
@@ -2477,6 +2484,12 @@ nsresult nsHttpTransaction::HandleContentStart() {
       mResponseHead->Reset();
       // wait to be called again...
       return NS_OK;
+    }
+
+    {
+      MutexAutoLock lock(mLock);
+      mConnection->GetSconeConnectionInfo(mSconeConnectionId,
+                                          mSconeThroughputAdvice);
     }
 
     (void)mResponseHead->GetHeader(nsHttp::Server, mServerHeader);

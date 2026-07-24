@@ -942,9 +942,6 @@ class ContentParent final : public PContentParent,
   mozilla::ipc::IPCResult RecvUpdateScriptCacheEverHitTelemetry(
       const uint64_t& aChildId, const uint32_t& aRate);
 
-  mozilla::ipc::IPCResult RecvGetSconeThroughputAdvice(
-      GetSconeThroughputAdviceResolver&& aResolver);
-
   already_AddRefed<PExternalHelperAppParent> AllocPExternalHelperAppParent(
       nsIURI* aUri, const mozilla::net::LoadInfoArgs& aLoadInfoArgs,
       const nsACString& aMimeContentType, const nsACString& aContentDisposition,

@@ -57,6 +57,8 @@ struct HttpChannelOnStartRequestArgs
   bool isProxyUsed;
   uint8_t redirectCount;
   nsCString protocolVersion;
+  uint64_t? sconeConnectionId;
+  uint64_t? sconeThroughputAdvice;
   CacheDisposition cacheDisposition;
 };
 

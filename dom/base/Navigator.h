@@ -80,7 +80,6 @@ nsTArray<uint32_t> SanitizeVibratePattern(const nsTArray<uint32_t>& aPattern);
 
 namespace network {
 class Connection;
-class Scone;
 }  // namespace network
 
 class LegacyMozTCPSocket;
@@ -184,7 +183,6 @@ class Navigator final : public nsISupports, public nsWrapperCache {
 
   already_AddRefed<LegacyMozTCPSocket> MozTCPSocket();
   network::Connection* GetConnection(ErrorResult& aRv);
-  network::Scone* GetScone(ErrorResult& aRv);
   MediaDevices* GetMediaDevices(ErrorResult& aRv);
   MediaDevices* GetExtantMediaDevices() const { return mMediaDevices; };
 
@@ -307,7 +305,6 @@ class Navigator final : public nsISupports, public nsWrapperCache {
   RefPtr<battery::BatteryManager> mBatteryManager;
   RefPtr<Promise> mBatteryPromise;
   RefPtr<network::Connection> mConnection;
-  RefPtr<network::Scone> mScone;
   RefPtr<CredentialsContainer> mCredentials;
   RefPtr<dom::Clipboard> mClipboard;
   RefPtr<MediaDevices> mMediaDevices;

@@ -205,13 +205,6 @@ partial interface Navigator {
   readonly attribute NetworkInformation connection;
 };
 
-// Experimental, non-standard API. SCONE is defined by
-// https://datatracker.ietf.org/doc/draft-ietf-scone-protocol/.
-partial interface Navigator {
-  [SameObject, Throws, SecureContext, Pref="network.webtransport.scone.enabled"]
-  readonly attribute Scone scone;
-};
-
 // https://dvcs.w3.org/hg/gamepad/raw-file/default/gamepad.html#navigator-interface-extension
 partial interface Navigator {
   [Throws, Pref="dom.gamepad.enabled"]

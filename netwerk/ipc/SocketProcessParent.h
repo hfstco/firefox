@@ -38,7 +38,7 @@ class SocketProcessParent final
   static already_AddRefed<SocketProcessParent> GetSingleton();
 
   mozilla::ipc::IPCResult RecvSconeThroughputAdviceChanged(
-      const Maybe<uint64_t>& aAdvice);
+      const uint64_t& aConnectionId, const Maybe<uint64_t>& aAdvice);
   mozilla::ipc::IPCResult RecvAddMemoryReport(const MemoryReport& aReport);
   mozilla::ipc::IPCResult RecvAccumulateChildHistograms(
       nsTArray<HistogramAccumulation>&& aAccumulations);

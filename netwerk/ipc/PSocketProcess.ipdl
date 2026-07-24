@@ -107,7 +107,8 @@ sync protocol PSocketProcess
   manages PNativeDNSResolverOverride;
 
 parent:
-  async SconeThroughputAdviceChanged(uint64_t? bitrate);
+  async SconeThroughputAdviceChanged(uint64_t connectionId,
+                                     uint64_t? bitrate);
   async InitCrashReporter(CrashReporterInitArgs aInitArgs);
   async AddMemoryReport(MemoryReport aReport);
   // Messages for sending telemetry to parent process.
@@ -199,9 +200,6 @@ child:
     returns (HttpRetParams[] params);
   async GetHttp3ConnectionStatsData()
     returns (Http3ConnectionStatsParams[] params);
-  async GetSconeThroughputAdvice()
-    returns (uint64_t? bitrate);
-
   async InitProxyAutoConfigChild(Endpoint<PProxyAutoConfigChild> endpoint);
 
   async RecheckIPConnectivity();

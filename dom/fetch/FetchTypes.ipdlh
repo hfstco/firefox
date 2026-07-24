@@ -99,6 +99,8 @@ struct InternalResponseMetadata {
   nullable BlobImpl bodyBlobImpl;
   nsString bodyLocalPath;
   RequestCredentials credentialsMode;
+  uint64_t? sconeConnectionId;
+  uint64_t? sconeThroughputAdvice;
 };
 
 struct ParentToParentInternalResponse {

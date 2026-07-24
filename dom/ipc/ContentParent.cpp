@@ -172,7 +172,6 @@
 #include "mozilla/net/NeckoParent.h"
 #include "mozilla/net/PCookieServiceParent.h"
 #include "mozilla/net/SconeService.h"
-#include "mozilla/net/SocketProcessParent.h"
 #include "mozilla/net/TRRService.h"
 #include "mozilla/net/UrlClassifierFeatureFactory.h"
 #include "mozilla/widget/RemoteLookAndFeel.h"
@@ -223,7 +222,6 @@
 #include "nsIMemoryInfoDumper.h"
 #include "nsIMemoryReporter.h"
 #include "nsINetworkLinkService.h"
-#include "nsIOService.h"
 #include "nsIObserverService.h"
 #include "nsIParentChannel.h"
 #include "nsIPrivateAttributionService.h"
@@ -4126,8 +4124,12 @@ ContentParent::Observe(nsISupports* aSubject, const char* aTopic,
   } else if (!strcmp(aTopic, NS_NETWORK_LINK_TYPE_TOPIC)) {
     UpdateNetworkLinkType();
   } else if (!strcmp(aTopic, net::kSconeThroughputAdviceChangedTopic)) {
-    (void)SendSconeThroughputAdviceChanged(
-        net::GetGlobalSconeThroughputAdvice());
+    nsresult rv;
+    uint64_t connectionId = nsDependentString(aData).ToInteger64(&rv);
+    if (NS_SUCCEEDED(rv)) {
+      (void)SendSconeThroughputAdviceChanged(
+          connectionId, net::GetSconeThroughputAdvice(connectionId));
+    }
   } else if (!strcmp(aTopic, "network:socket-process-crashed")) {
     (void)SendSocketProcessCrashed();
   } else if (!strcmp(aTopic, DEFAULT_TIMEZONE_CHANGED_OBSERVER_TOPIC)) {
@@ -4678,30 +4680,6 @@ bool ContentParent::DeallocPScriptCacheParent(PScriptCacheParent* cache) {
 mozilla::ipc::IPCResult ContentParent::RecvUpdateScriptCacheEverHitTelemetry(
     const uint64_t& aChildId, const uint32_t& aRate) {
   mozilla::dom::SharedScriptCache::RecvUpdateEverHitTelemetry(aChildId, aRate);
-  return IPC_OK();
-}
-
-mozilla::ipc::IPCResult ContentParent::RecvGetSconeThroughputAdvice(
-    GetSconeThroughputAdviceResolver&& aResolver) {
-  if (!net::nsIOService::UseSocketProcess()) {
-    aResolver(net::GetGlobalSconeThroughputAdvice());
-    return IPC_OK();
-  }
-
-  RefPtr<net::SocketProcessParent> socketParent =
-      net::SocketProcessParent::GetSingleton();
-  if (!socketParent) {
-    aResolver(Nothing());
-    return IPC_OK();
-  }
-
-  socketParent->SendGetSconeThroughputAdvice()->Then(
-      GetCurrentSerialEventTarget(), __func__,
-      [aResolver = std::move(aResolver)](
-          net::PSocketProcessParent::GetSconeThroughputAdvicePromise::
-              ResolveOrRejectValue&& aValue) {
-        aResolver(aValue.IsResolve() ? aValue.ResolveValue() : Nothing());
-      });
   return IPC_OK();
 }
 

@@ -419,6 +419,8 @@ void HttpChannelChild::OnStartRequest(
   mCacheDisposition = aArgs.cacheDisposition();
   mCacheFetchCount = aArgs.cacheFetchCount();
   mProtocolVersion = aArgs.protocolVersion();
+  SetSconeConnectionInfo(aArgs.sconeConnectionId(),
+                         aArgs.sconeThroughputAdvice());
   mCacheExpirationTime = aArgs.cacheExpirationTime();
   mSelfAddr = aArgs.selfAddr();
   mPeerAddr = aArgs.peerAddr();

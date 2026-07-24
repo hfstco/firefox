@@ -18,6 +18,7 @@
 #include "mozilla/dom/ResponseBinding.h"
 #include "mozilla/dom/URL.h"
 #include "mozilla/dom/WorkerPrivate.h"
+#include "mozilla/dom/network/Scone.h"
 #include "nsDOMString.h"
 #include "nsISupportsImpl.h"
 #include "nsIURI.h"
@@ -34,6 +35,10 @@ NS_IMPL_CYCLE_COLLECTION_CLASS(Response)
 NS_IMPL_CYCLE_COLLECTION_UNLINK_BEGIN_INHERITED(Response, FetchBody<Response>)
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mGlobal)
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mHeaders)
+  if (tmp->mScone) {
+    tmp->mScone->Shutdown();
+    tmp->mScone = nullptr;
+  }
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mSignalImpl)
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mFetchStreamReader)
   NS_IMPL_CYCLE_COLLECTION_UNLINK_PRESERVED_WRAPPER
@@ -42,6 +47,7 @@ NS_IMPL_CYCLE_COLLECTION_UNLINK_END
 NS_IMPL_CYCLE_COLLECTION_TRAVERSE_BEGIN_INHERITED(Response, FetchBody<Response>)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mGlobal)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mHeaders)
+  NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mScone)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mSignalImpl)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mFetchStreamReader)
 NS_IMPL_CYCLE_COLLECTION_TRAVERSE_END
@@ -461,6 +467,23 @@ Headers* Response::Headers_() {
   }
 
   return mHeaders;
+}
+
+network::Scone* Response::GetScone() {
+  Maybe<uint64_t> connectionId = mInternalResponse->GetSconeConnectionId();
+  if (!connectionId) {
+    return nullptr;
+  }
+
+  if (!mScone) {
+    nsCOMPtr<nsPIDOMWindowInner> window = do_QueryInterface(mGlobal);
+    if (!window) {
+      return nullptr;
+    }
+    mScone = new network::Scone(window, *connectionId,
+                                mInternalResponse->GetSconeThroughputAdvice());
+  }
+  return mScone;
 }
 
 }  // namespace mozilla::dom

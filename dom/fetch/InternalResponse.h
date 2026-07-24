@@ -343,6 +343,35 @@ class InternalResponse final : public AtomicSafeRefCounted<InternalResponse> {
     return mCredentialsMode;
   }
 
+  void SetSconeConnectionInfo(Maybe<uint64_t> aConnectionId,
+                              Maybe<uint64_t> aThroughputAdvice) {
+    if (mWrappedResponse) {
+      mWrappedResponse->SetSconeConnectionInfo(aConnectionId,
+                                               aThroughputAdvice);
+      return;
+    }
+    mSconeConnectionId = aConnectionId;
+    mSconeThroughputAdvice = aThroughputAdvice;
+  }
+
+  Maybe<uint64_t> GetSconeConnectionId() const {
+    if (Type() == ResponseType::Opaque ||
+        Type() == ResponseType::Opaqueredirect) {
+      return Nothing();
+    }
+    return mWrappedResponse ? mWrappedResponse->GetSconeConnectionId()
+                            : mSconeConnectionId;
+  }
+
+  Maybe<uint64_t> GetSconeThroughputAdvice() const {
+    if (Type() == ResponseType::Opaque ||
+        Type() == ResponseType::Opaqueredirect) {
+      return Nothing();
+    }
+    return mWrappedResponse ? mWrappedResponse->GetSconeThroughputAdvice()
+                            : mSconeThroughputAdvice;
+  }
+
   ~InternalResponse();
 
   explicit InternalResponse(const InternalResponse& aOther) = delete;
@@ -375,6 +404,8 @@ class InternalResponse final : public AtomicSafeRefCounted<InternalResponse> {
   int64_t mPaddingSize;
   nsresult mErrorCode;
   RequestCredentials mCredentialsMode;
+  Maybe<uint64_t> mSconeConnectionId;
+  Maybe<uint64_t> mSconeThroughputAdvice;
 
   // For alternative data such as JS Bytecode cached in the HTTP cache.
   nsCString mAlternativeDataType;

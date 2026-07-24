@@ -412,8 +412,10 @@ HttpTransactionChild::OnStartRequest(nsIRequest* aRequest) {
   }
 
   RefPtr<nsHttpConnectionInfo> connInfo;
-  UniquePtr<nsHttpResponseHead> head(
-      mTransaction->TakeResponseHeadAndConnInfo(getter_AddRefs(connInfo)));
+  Maybe<uint64_t> sconeConnectionId;
+  Maybe<uint64_t> sconeThroughputAdvice;
+  UniquePtr<nsHttpResponseHead> head(mTransaction->TakeResponseHeadAndConnInfo(
+      getter_AddRefs(connInfo), &sconeConnectionId, &sconeThroughputAdvice));
   Maybe<nsHttpResponseHead> optionalHead;
   nsTArray<uint8_t> dataForSniffer;
   if (head) {
@@ -495,6 +497,7 @@ HttpTransactionChild::OnStartRequest(nsIRequest* aRequest) {
       !!mDataBridgeParent, mTransaction->TakeRestartedState(),
       mTransaction->HTTPSSVCReceivedStage(), mTransaction->GetSupportsHTTP3(),
       mode, reason, mTransaction->Caps(), TimeStamp::Now(), infoArgs,
+      sconeConnectionId, sconeThroughputAdvice,
       mTransaction->GetTargetIPAddressSpace());
   return NS_OK;
 }

@@ -135,9 +135,6 @@ class SocketProcessChild final : public PSocketProcessChild {
       GetHttpConnectionDataResolver&& aResolve);
   mozilla::ipc::IPCResult RecvGetHttp3ConnectionStatsData(
       GetHttp3ConnectionStatsDataResolver&& aResolve);
-  mozilla::ipc::IPCResult RecvGetSconeThroughputAdvice(
-      GetSconeThroughputAdviceResolver&& aResolve);
-
   mozilla::ipc::IPCResult RecvInitProxyAutoConfigChild(
       Endpoint<PProxyAutoConfigChild>&& aEndpoint);
 

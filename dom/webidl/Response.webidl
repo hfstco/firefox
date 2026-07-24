@@ -47,6 +47,14 @@ partial interface Response {
   readonly attribute ReadableStream? body;
 };
 
+// Experimental, non-standard API. SCONE is defined by
+// https://datatracker.ietf.org/doc/draft-ietf-scone-protocol/.
+[Exposed=Window]
+partial interface Response {
+  [SameObject, SecureContext, Pref="network.webtransport.scone.enabled"]
+  readonly attribute Scone? scone;
+};
+
 dictionary ResponseInit {
   unsigned short status = 200;
   ByteString statusText = "";

@@ -179,13 +179,20 @@ nsresult HttpTransactionParent::AsyncRead(nsIStreamListener* listener,
 
 UniquePtr<nsHttpResponseHead>
 HttpTransactionParent::TakeResponseHeadAndConnInfo(
-    nsHttpConnectionInfo** aOut) {
+    nsHttpConnectionInfo** aOut, Maybe<uint64_t>* aSconeConnectionId,
+    Maybe<uint64_t>* aSconeThroughputAdvice) {
   MOZ_ASSERT(NS_IsMainThread());
   MOZ_ASSERT(!mResponseHeadTaken, "TakeResponseHead called 2x");
 
   if (aOut) {
     RefPtr<nsHttpConnectionInfo> connInfo = mConnInfo;
     connInfo.forget(aOut);
+  }
+  if (aSconeConnectionId) {
+    *aSconeConnectionId = mSconeConnectionId;
+  }
+  if (aSconeThroughputAdvice) {
+    *aSconeThroughputAdvice = mSconeThroughputAdvice;
   }
 
   mResponseHeadTaken = true;
@@ -444,6 +451,8 @@ mozilla::ipc::IPCResult HttpTransactionParent::RecvOnStartRequest(
     const nsIRequest::TRRMode& aMode, const TRRSkippedReason& aTrrSkipReason,
     const uint32_t& aCaps, const TimeStamp& aOnStartRequestStartTime,
     const HttpConnectionInfoCloneArgs& aArgs,
+    const Maybe<uint64_t>& aSconeConnectionId,
+    const Maybe<uint64_t>& aSconeThroughputAdvice,
     const nsILoadInfo::IPAddressSpace& aTargetIPAddressSpace) {
   RefPtr<nsHttpConnectionInfo> cinfo =
       nsHttpConnectionInfo::DeserializeHttpConnectionInfoCloneArgs(aArgs);
@@ -456,14 +465,15 @@ mozilla::ipc::IPCResult HttpTransactionParent::RecvOnStartRequest(
        aDataForSniffer = CopyableTArray{std::move(aDataForSniffer)},
        aAltSvcUsed, aDataToChildProcess, aRestarted, aHTTPSSVCReceivedStage,
        aSupportsHttp3, aMode, aTrrSkipReason, aCaps, aOnStartRequestStartTime,
-       aTargetIPAddressSpace, cinfo{std::move(cinfo)}]() mutable {
+       aSconeConnectionId, aSconeThroughputAdvice, aTargetIPAddressSpace,
+       cinfo{std::move(cinfo)}]() mutable {
         self->DoOnStartRequest(
             aStatus, std::move(aResponseHead), securityInfo,
             aProxyConnectFailed, aTimings, std::move(aProxyConnectResponseHead),
             std::move(aDataForSniffer), aAltSvcUsed, aDataToChildProcess,
             aRestarted, aHTTPSSVCReceivedStage, aSupportsHttp3, aMode,
             aTrrSkipReason, aCaps, aOnStartRequestStartTime, cinfo,
-            aTargetIPAddressSpace);
+            aSconeConnectionId, aSconeThroughputAdvice, aTargetIPAddressSpace);
       }));
   return IPC_OK();
 }
@@ -497,7 +507,8 @@ void HttpTransactionParent::DoOnStartRequest(
     const uint32_t& aHTTPSSVCReceivedStage, const bool& aSupportsHttp3,
     const nsIRequest::TRRMode& aMode, const TRRSkippedReason& aSkipReason,
     const uint32_t& aCaps, const TimeStamp& aOnStartRequestStartTime,
-    nsHttpConnectionInfo* aConnInfo,
+    nsHttpConnectionInfo* aConnInfo, const Maybe<uint64_t>& aSconeConnectionId,
+    const Maybe<uint64_t>& aSconeThroughputAdvice,
     const nsILoadInfo::IPAddressSpace& aTargetIPAddressSpace) {
   LOG(("HttpTransactionParent::DoOnStartRequest [this=%p aStatus=%" PRIx32
        "]\n",
@@ -519,6 +530,8 @@ void HttpTransactionParent::DoOnStartRequest(
   mSecurityInfo = aSecurityInfo;
   mOnStartRequestStartTime = aOnStartRequestStartTime;
   mConnInfo = aConnInfo;
+  mSconeConnectionId = aSconeConnectionId;
+  mSconeThroughputAdvice = aSconeThroughputAdvice;
   mTargetIPAddressSpace = aTargetIPAddressSpace;
 
   if (aResponseHead.isSome()) {

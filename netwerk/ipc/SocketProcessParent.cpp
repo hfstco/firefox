@@ -73,8 +73,8 @@ already_AddRefed<SocketProcessParent> SocketProcessParent::GetSingleton() {
 }
 
 mozilla::ipc::IPCResult SocketProcessParent::RecvSconeThroughputAdviceChanged(
-    const Maybe<uint64_t>& aAdvice) {
-  SetGlobalSconeThroughputAdvice(aAdvice);
+    const uint64_t& aConnectionId, const Maybe<uint64_t>& aAdvice) {
+  SetSconeThroughputAdvice(aConnectionId, aAdvice);
   return IPC_OK();
 }
 

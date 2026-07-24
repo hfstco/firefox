@@ -20,6 +20,9 @@ class PrincipalInfo;
 namespace dom {
 
 class Headers;
+namespace network {
+class Scone;
+}
 
 class Response final : public FetchBody<Response>, public nsWrapperCache {
   NS_DECL_ISUPPORTS_INHERITED
@@ -78,6 +81,7 @@ class Response final : public FetchBody<Response>, public nsWrapperCache {
   }
 
   Headers* Headers_();
+  network::Scone* GetScone();
 
   void GetBody(nsIInputStream** aStream, int64_t* aBodyLength = nullptr) {
     mInternalResponse->GetBody(aStream, aBodyLength);
@@ -149,6 +153,7 @@ class Response final : public FetchBody<Response>, public nsWrapperCache {
   SafeRefPtr<InternalResponse> mInternalResponse;
   // Lazily created
   RefPtr<Headers> mHeaders;
+  RefPtr<network::Scone> mScone;
   RefPtr<AbortSignalImpl> mSignalImpl;
 };
 

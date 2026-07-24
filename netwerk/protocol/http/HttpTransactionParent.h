@@ -53,6 +53,8 @@ class HttpTransactionParent final : public PHttpTransactionParent,
       const nsIRequest::TRRMode& aMode, const TRRSkippedReason& aSkipReason,
       const uint32_t& aCaps, const TimeStamp& aOnStartRequestStartTime,
       const HttpConnectionInfoCloneArgs& aArgs,
+      const Maybe<uint64_t>& aSconeConnectionId,
+      const Maybe<uint64_t>& aSconeThroughputAdvice,
       const nsILoadInfo::IPAddressSpace& aTargetIPAddressSpace);
   mozilla::ipc::IPCResult RecvOnTransportStatus(
       const nsresult& aStatus, const int64_t& aProgress,
@@ -112,6 +114,8 @@ class HttpTransactionParent final : public PHttpTransactionParent,
       const nsIRequest::TRRMode& aMode, const TRRSkippedReason& aSkipReason,
       const uint32_t& aCaps, const TimeStamp& aOnStartRequestStartTime,
       nsHttpConnectionInfo* aConnInfo,
+      const Maybe<uint64_t>& aSconeConnectionId,
+      const Maybe<uint64_t>& aSconeThroughputAdvice,
       const nsILoadInfo::IPAddressSpace& aTargetIPAddressSpace);
   void DoOnDataAvailable(const nsCString& aData, const uint64_t& aOffset,
                          const TimeStamp& aOnDataAvailableStartTime);
@@ -179,6 +183,8 @@ class HttpTransactionParent final : public PHttpTransactionParent,
   std::function<void()> mCallOnResume;
   uint32_t mHTTPSSVCReceivedStage{};
   RefPtr<nsHttpConnectionInfo> mConnInfo;
+  Maybe<uint64_t> mSconeConnectionId;
+  Maybe<uint64_t> mSconeThroughputAdvice;
   bool mSupportsHTTP3 = false;
 };
 

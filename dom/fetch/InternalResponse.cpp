@@ -93,6 +93,9 @@ template <typename T>
   response->SetBodyLocalPath(bodyLocalPath);
 
   response->mCredentialsMode = aIPCResponse.metadata().credentialsMode();
+  response->SetSconeConnectionInfo(
+      aIPCResponse.metadata().sconeConnectionId(),
+      aIPCResponse.metadata().sconeThroughputAdvice());
 
   switch (aIPCResponse.metadata().type()) {
     case ResponseType::Basic:
@@ -138,7 +141,8 @@ InternalResponseMetadata InternalResponse::GetMetadata() {
       mType, GetUnfilteredURLList().Clone(), GetUnfilteredStatus(),
       GetUnfilteredStatusText(), headersGuard, headers, mErrorCode,
       GetAlternativeDataType(), securityInfo, principalInfo, bodyBlobImpl,
-      bodyLocalPath, GetCredentialsMode());
+      bodyLocalPath, GetCredentialsMode(), GetSconeConnectionId(),
+      GetSconeThroughputAdvice());
 }
 
 void InternalResponse::ToChildToParentInternalResponse(
@@ -423,6 +427,8 @@ SafeRefPtr<InternalResponse> InternalResponse::CreateIncompleteCopy() {
   copy->mType = mType;
   copy->mURLList = mURLList.Clone();
   copy->mChannelInfo = mChannelInfo;
+  copy->mSconeConnectionId = mSconeConnectionId;
+  copy->mSconeThroughputAdvice = mSconeThroughputAdvice;
   if (mPrincipalInfo) {
     copy->mPrincipalInfo =
         MakeUnique<mozilla::ipc::PrincipalInfo>(*mPrincipalInfo);

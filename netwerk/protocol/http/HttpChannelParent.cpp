@@ -1242,6 +1242,8 @@ HttpChannelParent::OnStartRequest(nsIRequest* aRequest) {
     httpChannelImpl->GetCacheTokenFetchCount(&args.cacheFetchCount());
     httpChannelImpl->GetCacheTokenExpirationTime(&args.cacheExpirationTime());
     httpChannelImpl->GetProtocolVersion(args.protocolVersion());
+    httpChannelImpl->GetSconeConnectionInfo(args.sconeConnectionId(),
+                                            args.sconeThroughputAdvice());
 
     mDataSentToChildProcess = httpChannelImpl->DataSentToChildProcess();
     args.dataFromSocketProcess() = mDataSentToChildProcess;

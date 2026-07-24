@@ -94,11 +94,9 @@
 #include "mozilla/dom/Promise.h"
 #include "mozilla/dom/WorkerPrivate.h"
 #include "mozilla/dom/WorkerRunnable.h"
-#include "mozilla/dom/network/Scone.h"
 #include "mozilla/ipc/URIUtils.h"
 #include "nsIDocShell.h"
 #include "nsIExternalProtocolHandler.h"
-#include "nsIOService.h"
 #include "nsIScriptError.h"
 #include "nsIUploadChannel2.h"
 #include "nsJSUtils.h"
@@ -150,7 +148,6 @@ NS_IMPL_CYCLE_COLLECTION_TRAVERSE_BEGIN(Navigator)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mBatteryManager)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mBatteryPromise)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mConnection)
-  NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mScone)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mStorageManager)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mCredentials)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mMediaDevices)
@@ -211,11 +208,6 @@ void Navigator::Invalidate() {
   if (mConnection) {
     mConnection->Shutdown();
     mConnection = nullptr;
-  }
-
-  if (mScone) {
-    mScone->Shutdown();
-    mScone = nullptr;
   }
 
   mMediaDevices = nullptr;
@@ -1932,17 +1924,6 @@ network::Connection* Navigator::GetConnection(ErrorResult& aRv) {
   }
 
   return mConnection;
-}
-
-network::Scone* Navigator::GetScone(ErrorResult& aRv) {
-  if (!mScone) {
-    if (!mWindow) {
-      aRv.Throw(NS_ERROR_UNEXPECTED);
-      return nullptr;
-    }
-    mScone = new network::Scone(mWindow);
-  }
-  return mScone;
 }
 
 already_AddRefed<ServiceWorkerContainer> Navigator::ServiceWorker() {

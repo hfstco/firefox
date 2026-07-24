@@ -308,6 +308,9 @@ class Http3Session final : public Http3SessionBase,
 
   void SetDontExclude() { mDontExclude = true; }
 
+  void GetSconeConnectionInfo(Maybe<uint64_t>& aConnectionId,
+                              Maybe<uint64_t>& aThroughputAdvice) override;
+
  private:
   ~Http3Session();
 
@@ -496,6 +499,7 @@ class Http3Session final : public Http3SessionBase,
   bool mHad0RttStream = false;
   // Current SCONE throughput advice for this QUIC connection, in bits per
   // second. Nothing means that no current advice is available.
+  const uint64_t mSconeConnectionId;
   Maybe<uint64_t> mSconeThroughputAdvice;
   // The lifetime of the UDP socket is managed by the HttpConnectionUDP. This
   // is only used in Http3Session::ProcessOutput. Using raw pointer here to

@@ -56,7 +56,10 @@ parent:
                        TRRSkippedReason trrSkipReason,
                        uint32_t caps,
                        TimeStamp onStartRequestStart,
-                       HttpConnectionInfoCloneArgs connInfoArgs, IPAddressSpace targetIpAddressSpace);
+                       HttpConnectionInfoCloneArgs connInfoArgs,
+                       uint64_t? sconeConnectionId,
+                       uint64_t? sconeThroughputAdvice,
+                       IPAddressSpace targetIpAddressSpace);
   async OnTransportStatus(nsresult status,
                           int64_t progress,
                           int64_t progressMax,

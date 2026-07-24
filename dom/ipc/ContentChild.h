@@ -450,7 +450,7 @@ class ContentChild final : public PContentChild,
 
   mozilla::ipc::IPCResult RecvNetworkLinkTypeChange(const uint32_t& aType);
   mozilla::ipc::IPCResult RecvSconeThroughputAdviceChanged(
-      const Maybe<uint64_t>& aAdvice);
+      const uint64_t& aConnectionId, const Maybe<uint64_t>& aAdvice);
   uint32_t NetworkLinkType() const { return mNetworkLinkType; }
 
   mozilla::ipc::IPCResult RecvSocketProcessCrashed();

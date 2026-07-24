@@ -5,12 +5,9 @@
 #include "Scone.h"
 
 #include "mozilla/Services.h"
-#include "mozilla/dom/ContentChild.h"
 #include "mozilla/dom/SconeBinding.h"
 #include "mozilla/net/SconeService.h"
-#include "mozilla/net/SocketProcessParent.h"
 #include "nsIObserverService.h"
-#include "nsIXULRuntime.h"
 
 namespace mozilla::dom::network {
 
@@ -32,14 +29,17 @@ NS_INTERFACE_MAP_END_INHERITING(DOMEventTargetHelper)
 NS_IMPL_ADDREF_INHERITED(Scone, DOMEventTargetHelper)
 NS_IMPL_RELEASE_INHERITED(Scone, DOMEventTargetHelper)
 
-Scone::Scone(nsPIDOMWindowInner* aWindow) : DOMEventTargetHelper(aWindow) {
+Scone::Scone(nsPIDOMWindowInner* aWindow, uint64_t aConnectionId,
+             Maybe<uint64_t> aThroughputAdvice)
+    : DOMEventTargetHelper(aWindow),
+      mConnectionId(aConnectionId),
+      mThroughputAdvice(aThroughputAdvice) {
   nsCOMPtr<nsIObserverService> observerService =
       mozilla::services::GetObserverService();
   if (observerService) {
     observerService->AddObserver(this, net::kSconeThroughputAdviceChangedTopic,
                                  true);
   }
-  RequestCurrentAdvice();
 }
 
 Scone::~Scone() { Shutdown(); }
@@ -78,35 +78,13 @@ void Scone::DisconnectFromOwner() {
 NS_IMETHODIMP Scone::Observe(nsISupports* aSubject, const char* aTopic,
                              const char16_t* aData) {
   if (!strcmp(aTopic, net::kSconeThroughputAdviceChangedTopic)) {
-    Update(net::GetGlobalSconeThroughputAdvice(), true);
+    nsresult rv;
+    uint64_t connectionId = nsDependentString(aData).ToInteger64(&rv);
+    if (NS_SUCCEEDED(rv) && connectionId == mConnectionId) {
+      Update(net::GetSconeThroughputAdvice(mConnectionId), true);
+    }
   }
   return NS_OK;
-}
-
-void Scone::RequestCurrentAdvice() {
-  auto resolve = [self = RefPtr{this}](Maybe<uint64_t> aAdvice) {
-    self->Update(aAdvice, false);
-  };
-  auto reject = [](mozilla::ipc::ResponseRejectReason) {};
-
-  if (XRE_IsContentProcess()) {
-    if (ContentChild* contentChild = ContentChild::GetSingleton()) {
-      contentChild->SendGetSconeThroughputAdvice()->Then(
-          GetCurrentSerialEventTarget(), __func__, std::move(resolve),
-          std::move(reject));
-    }
-    return;
-  }
-
-  if (RefPtr<net::SocketProcessParent> socketParent =
-          net::SocketProcessParent::GetSingleton()) {
-    socketParent->SendGetSconeThroughputAdvice()->Then(
-        GetCurrentSerialEventTarget(), __func__, std::move(resolve),
-        std::move(reject));
-    return;
-  }
-
-  resolve(net::GetGlobalSconeThroughputAdvice());
 }
 
 void Scone::Update(Maybe<uint64_t> aAdvice, bool aNotify) {

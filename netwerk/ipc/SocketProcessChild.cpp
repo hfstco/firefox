@@ -728,12 +728,6 @@ mozilla::ipc::IPCResult SocketProcessChild::RecvGetHttp3ConnectionStatsData(
   return IPC_OK();
 }
 
-mozilla::ipc::IPCResult SocketProcessChild::RecvGetSconeThroughputAdvice(
-    GetSconeThroughputAdviceResolver&& aResolve) {
-  aResolve(GetGlobalSconeThroughputAdvice());
-  return IPC_OK();
-}
-
 mozilla::ipc::IPCResult SocketProcessChild::RecvInitProxyAutoConfigChild(
     Endpoint<PProxyAutoConfigChild>&& aEndpoint) {
   // For parsing PAC.

@@ -2062,8 +2062,8 @@ mozilla::ipc::IPCResult ContentChild::RecvNetworkLinkTypeChange(
 }
 
 mozilla::ipc::IPCResult ContentChild::RecvSconeThroughputAdviceChanged(
-    const Maybe<uint64_t>& aAdvice) {
-  net::SetGlobalSconeThroughputAdvice(aAdvice);
+    const uint64_t& aConnectionId, const Maybe<uint64_t>& aAdvice) {
+  net::SetSconeThroughputAdvice(aConnectionId, aAdvice);
   return IPC_OK();
 }
 

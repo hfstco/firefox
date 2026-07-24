@@ -243,6 +243,18 @@ class HttpBaseChannel : public nsHashPropertyBag,
   NS_IMETHOD SetBrowserId(uint64_t aId) override;
   NS_IMETHOD GetIsProxyUsed(bool* aIsProxyUsed) override;
 
+  void SetSconeConnectionInfo(Maybe<uint64_t> aConnectionId,
+                              Maybe<uint64_t> aThroughputAdvice) {
+    mSconeConnectionId = aConnectionId;
+    mSconeThroughputAdvice = aThroughputAdvice;
+  }
+
+  void GetSconeConnectionInfo(Maybe<uint64_t>& aConnectionId,
+                              Maybe<uint64_t>& aThroughputAdvice) const {
+    aConnectionId = mSconeConnectionId;
+    aThroughputAdvice = mSconeThroughputAdvice;
+  }
+
   using nsIClassifiedChannel::IsThirdPartyTrackingResource;
 
   virtual void SetSource(UniquePtr<ProfileChunkedBuffer> aSource) override {
@@ -813,6 +825,8 @@ class HttpBaseChannel : public nsHashPropertyBag,
 
   NetAddr mSelfAddr;
   NetAddr mPeerAddr;
+  Maybe<uint64_t> mSconeConnectionId;
+  Maybe<uint64_t> mSconeThroughputAdvice;
 
   nsTArray<std::pair<nsString, nsString>> mSecurityConsoleMessages;
   nsTArray<nsCString> mUnsafeHeaders;

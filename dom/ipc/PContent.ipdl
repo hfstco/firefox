@@ -622,7 +622,8 @@ child:
       uint32_t[] namespaces);
 
     async NetworkLinkTypeChange(uint32_t type);
-    async SconeThroughputAdviceChanged(uint64_t? bitrate);
+    async SconeThroughputAdviceChanged(uint64_t connectionId,
+                                       uint64_t? bitrate);
     async SocketProcessCrashed();
 
     // Re-create the rendering stack for a device reset.
@@ -705,8 +706,6 @@ child:
 
 parent:
     async UpdateScriptCacheEverHitTelemetry(uint64_t aChildId, uint32_t aRate);
-    async GetSconeThroughputAdvice() returns (uint64_t? bitrate);
-
     // Sent by the content process immediately before it does an operation which
     // it believes makes it "untrusted", such as loading untrusted content in an
     // content docshell, starting a worker, etc. Operations which rely on a

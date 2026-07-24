@@ -424,6 +424,8 @@ class nsHttpTransaction final : public nsAHttpTransaction,
   nsCOMPtr<nsITransportEventSink> mTransportSink;
   nsCOMPtr<nsIEventTarget> mConsumerTarget;
   nsCOMPtr<nsITransportSecurityInfo> mSecurityInfo MOZ_GUARDED_BY(mLock);
+  Maybe<uint64_t> mSconeConnectionId MOZ_GUARDED_BY(mLock);
+  Maybe<uint64_t> mSconeThroughputAdvice MOZ_GUARDED_BY(mLock);
   nsCOMPtr<nsIAsyncInputStream> mPipeIn;
   nsCOMPtr<nsIAsyncOutputStream> mPipeOut;
   nsCOMPtr<nsIRequestContext> mRequestContext;

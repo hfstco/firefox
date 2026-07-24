@@ -173,6 +173,12 @@ class nsAHttpConnection : public nsISupports {
   virtual PRIntervalTime LastWriteTime() = 0;
   virtual void SetCloseReason(ConnectionCloseReason aReason) = 0;
 
+  virtual void GetSconeConnectionInfo(Maybe<uint64_t>& aConnectionId,
+                                      Maybe<uint64_t>& aThroughputAdvice) {
+    aConnectionId.reset();
+    aThroughputAdvice.reset();
+  }
+
   friend class DeleteAHttpConnection;
   void DeleteSelfOnSocketThread();
 

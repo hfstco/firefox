@@ -1146,6 +1146,16 @@ FetchDriver::OnStartRequest(nsIRequest* aRequest) {
 
     response->Headers()->FillResponseHeaders(httpChannel);
 
+    RefPtr<net::HttpBaseChannel> httpBaseChannel = do_QueryObject(mChannel);
+    if (httpBaseChannel) {
+      Maybe<uint64_t> sconeConnectionId;
+      Maybe<uint64_t> sconeThroughputAdvice;
+      httpBaseChannel->GetSconeConnectionInfo(sconeConnectionId,
+                                              sconeThroughputAdvice);
+      response->SetSconeConnectionInfo(sconeConnectionId,
+                                       sconeThroughputAdvice);
+    }
+
     // If Content-Encoding or Transfer-Encoding headers are set, then the actual
     // Content-Length (which refer to the decoded data) is obscured behind the
     // encodings.

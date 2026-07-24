@@ -9359,8 +9359,11 @@ nsHttpChannel::OnStartRequest(nsIRequest* request) {
     // all of the response headers have been acquired, so we can take
     // ownership of them from the transaction.
     RefPtr<nsHttpConnectionInfo> connInfo;
-    mResponseHead =
-        mTransaction->TakeResponseHeadAndConnInfo(getter_AddRefs(connInfo));
+    Maybe<uint64_t> sconeConnectionId;
+    Maybe<uint64_t> sconeThroughputAdvice;
+    mResponseHead = mTransaction->TakeResponseHeadAndConnInfo(
+        getter_AddRefs(connInfo), &sconeConnectionId, &sconeThroughputAdvice);
+    SetSconeConnectionInfo(sconeConnectionId, sconeThroughputAdvice);
     mSupportsHTTP3 = mTransaction->GetSupportsHTTP3();
     // the response head may be null if the transaction was cancelled.  in
     // which case we just need to call OnStartRequest/OnStopRequest.
