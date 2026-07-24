@@ -248,10 +248,8 @@ impl EventProvider for ConnectionEvents {
 mod tests {
     use neqo_common::event::Provider as _;
 
-    use crate::{CloseReason, ConnectionEvent, ConnectionEvents, Error, State, StreamId};
     use crate::{
-        CloseReason, ConnectionEvent, ConnectionEvents, Error, State, Stats, StreamId,
-        scone::Bitrate,
+        CloseReason, ConnectionEvent, ConnectionEvents, Error, State, StreamId, scone::Bitrate,
     };
 
     #[test]

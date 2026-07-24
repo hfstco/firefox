@@ -39,7 +39,6 @@
 #include "mozilla/net/DNSRequestParent.h"
 #include "mozilla/net/NativeDNSResolverOverrideChild.h"
 #include "mozilla/net/ProxyAutoConfigChild.h"
-#include "mozilla/net/SconeService.h"
 #include "mozilla/net/SocketProcessBackgroundChild.h"
 #include "mozilla/net/TRRServiceChild.h"
 #include "nsDebugImpl.h"

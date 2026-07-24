@@ -971,7 +971,6 @@ impl Http3Client {
                 }
                 ConnectionEvent::SendStreamComplete { .. }
                 | ConnectionEvent::OutgoingDatagramOutcome { .. }
-                | ConnectionEvent::SconeUpdated(_)
                 | ConnectionEvent::IncomingDatagramDropped
                 | ConnectionEvent::PathMigrated { .. } => {}
             }
