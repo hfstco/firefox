@@ -727,3 +727,117 @@ add_task(async function test_pinned_tab_selected_marker() {
   SidebarTestUtils.closePanel(window);
   await SpecialPowers.popPrefEnv();
 });
+
+add_task(async function test_inactive_window_deemphasizes_selected_border() {
+  await SpecialPowers.pushPrefEnv({
+    set: [["browser.nova.enabled", true]],
+  });
+
+  const component = await showOpenTabsPanel();
+  await BrowserTestUtils.waitForMutationCondition(
+    component.shadowRoot,
+    { childList: true, subtree: true },
+    () => component.shadowRoot.querySelectorAll("moz-card").length === 1
+  );
+
+  const secondWindow = await BrowserTestUtils.openNewBrowserWindow();
+  await BrowserTestUtils.openNewForegroundTab(
+    secondWindow.gBrowser,
+    "data:text/html,<title>Inactive</title>"
+  );
+  const pinnedTab = secondWindow.gBrowser.tabs[0];
+  secondWindow.gBrowser.pinTab(pinnedTab);
+  secondWindow.gBrowser.selectedTab = pinnedTab;
+
+  await BrowserTestUtils.waitForMutationCondition(
+    component.shadowRoot,
+    { childList: true, subtree: true },
+    () => component.shadowRoot.querySelectorAll("moz-card").length === 2
+  );
+
+  const cards = component.shadowRoot.querySelectorAll("moz-card");
+  const currentList = cards[0].querySelector("sidebar-tab-list");
+  const inactiveList = cards[1].querySelector("sidebar-tab-list");
+
+  await TestUtils.waitForCondition(
+    () => inactiveList.hasAttribute("inactive-window"),
+    "The non-current window's tab list is marked inactive."
+  );
+  Assert.ok(
+    !currentList.hasAttribute("inactive-window"),
+    "The current window's tab list is not marked inactive."
+  );
+
+  await BrowserTestUtils.waitForMutationCondition(
+    inactiveList.shadowRoot,
+    { childList: true, subtree: true, attributes: true },
+    () =>
+      !![...inactiveList.rowEls].length &&
+      [...inactiveList.rowEls].every(row => row.hasAttribute("inactive-window"))
+  );
+  Assert.ok(
+    [...currentList.rowEls].every(row => !row.hasAttribute("inactive-window")),
+    "Rows in the current window are not marked inactive."
+  );
+
+  const inactivePinnedButton = await TestUtils.waitForCondition(() =>
+    cards[1].querySelector(".pinned-tabs moz-button.selected")
+  );
+  Assert.ok(
+    inactivePinnedButton.classList.contains("inactive"),
+    "The selected pinned tab in a non-current window is marked inactive."
+  );
+
+  await BrowserTestUtils.closeWindow(secondWindow);
+  SidebarTestUtils.closePanel(window);
+  await SpecialPowers.popPrefEnv();
+});
+
+add_task(async function test_context_menu_close_tab() {
+  const url = "data:text/html,CloseMe";
+  const tab = await BrowserTestUtils.openNewForegroundTab(gBrowser, url);
+
+  const component = await showOpenTabsPanel();
+  const tabList = getTabList(component);
+  await waitForRowCount(tabList, getVisibleTabCount());
+
+  const row = [...tabList.rowEls].find(r => r.url === url);
+  Assert.ok(row, "Found the row for the opened tab.");
+
+  await activateContextMenuItem(
+    row.mainEl,
+    "sidebar-opentabs-context-close-tab"
+  );
+  await BrowserTestUtils.waitForMutationCondition(
+    gBrowser.tabContainer,
+    { childList: true, subtree: true },
+    () => !gBrowser.tabs.includes(tab)
+  );
+  Assert.ok(!gBrowser.tabs.includes(tab), "The context menu closed the tab.");
+
+  SidebarTestUtils.closePanel(window);
+});
+
+add_task(async function test_context_menu_copy_link() {
+  const url = "data:text/html,CopyMe";
+  const tab = await BrowserTestUtils.openNewForegroundTab(gBrowser, url);
+
+  const component = await showOpenTabsPanel();
+  const tabList = getTabList(component);
+  await waitForRowCount(tabList, getVisibleTabCount());
+
+  const row = [...tabList.rowEls].find(r => r.url === url);
+  Assert.ok(row, "Found the row for the opened tab.");
+
+  await activateContextMenuItem(
+    row.mainEl,
+    "sidebar-opentabs-context-copy-link"
+  );
+  await TestUtils.waitForCondition(
+    () => SpecialPowers.getClipboardData("text/plain") === url,
+    "The context menu copied the tab's URL to the clipboard."
+  );
+
+  BrowserTestUtils.removeTab(tab);
+  SidebarTestUtils.closePanel(window);
+});

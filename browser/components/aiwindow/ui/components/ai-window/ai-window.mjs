@@ -22,8 +22,6 @@ ChromeUtils.defineESModuleGetters(lazy, {
   Chat: "moz-src:///browser/components/aiwindow/models/Chat.sys.mjs",
   GET_PAGE_CONTENT:
     "moz-src:///browser/components/aiwindow/models/Tools.sys.mjs",
-  FEATURE_MAJOR_VERSIONS:
-    "moz-src:///browser/components/aiwindow/models/Utils.sys.mjs",
   MODEL_FEATURES: "moz-src:///browser/components/aiwindow/models/Utils.sys.mjs",
   openAIEngine:
     "moz-src:///browser/components/aiwindow/models/openAIEngine.sys.mjs",
@@ -39,7 +37,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
     "moz-src:///browser/components/aiwindow/ui/modules/FeedbackModal.sys.mjs",
   ChatConversation:
     "moz-src:///browser/components/aiwindow/ui/modules/ChatConversation.sys.mjs",
-  TopSites: "resource:///modules/topsites/TopSites.sys.mjs",
+  AboutNewTab: "resource:///modules/AboutNewTab.sys.mjs",
   URILoadingHelper: "resource:///modules/URILoadingHelper.sys.mjs",
   MEMORIES_FLAG_SOURCE:
     "moz-src:///browser/components/aiwindow/ui/modules/ChatEnums.sys.mjs",
@@ -66,6 +64,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   getCurrentModelName:
     "moz-src:///browser/components/aiwindow/models/Utils.sys.mjs",
   ToolUI: "moz-src:///browser/components/aiwindow/ui/modules/ToolUI.sys.mjs",
+  AgentUI: "moz-src:///browser/components/aiwindow/ui/modules/AgentUI.sys.mjs",
   ACTION_LOG_UI_TYPE:
     "moz-src:///browser/components/aiwindow/ui/modules/ToolActionLog.sys.mjs",
   getActionLogConfigForTool:
@@ -74,6 +73,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
     "moz-src:///browser/components/aiwindow/ui/modules/ToolActionLog.sys.mjs",
   UI_UPDATE_TYPES:
     "moz-src:///browser/components/aiwindow/ui/modules/ToolUI.sys.mjs",
+  UrlbarShared: "chrome://browser/content/urlbar/UrlbarShared.mjs",
 });
 
 ChromeUtils.defineLazyGetter(lazy, "log", function () {
@@ -152,6 +152,7 @@ const TAB_FAVICON_CHAT =
   "chrome://browser/content/aiwindow/assets/ask-icon.svg";
 const PREF_CHAT_INTERACTION_COUNT = "browser.smartwindow.chat.interactionCount";
 const PREF_HIDE_TOP_SITES = "browser.smartwindow.hideTopSites";
+const PREF_AGENT_ENABLED = "browser.smartwindow.agent.enabled";
 const MAX_INTERACTION_COUNT = 1000;
 const MAX_SIDEBAR_STARTER_CACHE_KEYS = 20;
 const MAX_TOP_SITES = 8;
@@ -227,6 +228,7 @@ export class AIWindow extends MozLitElement {
   #sidebarStarterCache = new Map();
   #smartbarResizeObserver = null;
   #windowModeObserver = null;
+  #topSitesObserver = null;
   #swapDocShellsChromeWindow = null;
   #hasMemories = false;
   #selectedModelChoiceId = null;
@@ -410,6 +412,12 @@ export class AIWindow extends MozLitElement {
       false,
       () => this.#syncTopSites()
     );
+    XPCOMUtils.defineLazyPreferenceGetter(
+      this,
+      "agentEnabledPref",
+      PREF_AGENT_ENABLED,
+      false
+    );
     // TODO Bug 2053495: remove with mistral release pref
     XPCOMUtils.defineLazyPreferenceGetter(
       this,
@@ -467,6 +475,7 @@ export class AIWindow extends MozLitElement {
       "chat-conversation:seen-urls-updated",
       this.#onSeenUrlsUpdated
     );
+    lazy.AgentUI.observeMonitorChanges(this.#conversation);
   }
 
   #removeConversationListeners() {
@@ -486,6 +495,7 @@ export class AIWindow extends MozLitElement {
       "chat-conversation:seen-urls-updated",
       this.#onSeenUrlsUpdated
     );
+    lazy.AgentUI.unobserveMonitorChanges(this.#conversation);
   }
 
   #onSeenUrlsUpdated = () => {
@@ -571,6 +581,15 @@ export class AIWindow extends MozLitElement {
     Services.prefs.addObserver(
       PREF_CUSTOM_ENDPOINT,
       this.#onCustomEndpointPrefChanged
+    );
+
+    // AboutNewTab populates its Top Sites store asynchronously, so on a fresh
+    // browser start the store can still be empty when we first read it. Reload
+    // whenever it changes so the row appears once the feed is ready.
+    this.#topSitesObserver = () => this.#syncTopSites();
+    Services.obs.addObserver(
+      this.#topSitesObserver,
+      "newtab-top-sites-changed"
     );
 
     this.#loadPendingConversation();
@@ -795,6 +814,15 @@ export class AIWindow extends MozLitElement {
       this.#onCustomEndpointPrefChanged
     );
 
+    // Clean up Top Sites store observer
+    if (this.#topSitesObserver) {
+      Services.obs.removeObserver(
+        this.#topSitesObserver,
+        "newtab-top-sites-changed"
+      );
+      this.#topSitesObserver = null;
+    }
+
     // Clean up smartbar toggle button
     if (this.#smartbarToggleButton) {
       this.#smartbarToggleButton.remove();
@@ -953,10 +981,11 @@ export class AIWindow extends MozLitElement {
     this.#hasModelChoiceOverride =
       isTabOverride && modelChoiceId !== lazy.getCurrentModelChoiceId();
 
-    // Update the system prompt for the new model
+    // Update the system prompt for the new model. The engine is rebuilt on the
+    // next send, so pass the freshly-selected model explicitly here.
     if (this.#conversation?.messages.length) {
       await this.#conversation.loadSystemPrompt({
-        modelChoiceIdOverride: modelChoiceId,
+        model: this.selectedModelId,
       });
     }
 
@@ -1299,8 +1328,8 @@ export class AIWindow extends MozLitElement {
 
   /**
    * Loads the user's Top Sites and renders a single row of them below the
-   * Smartbar in fullpage mode. TopSites.getSites() already excludes sponsored
-   * sites; we only keep the first MAX_TOP_SITES entries to fit a single row.
+   * Smartbar in fullpage mode. Sponsored sites are filtered out; we only keep
+   * the first MAX_TOP_SITES entries to fit a single row.
    *
    * @private
    */
@@ -1330,10 +1359,10 @@ export class AIWindow extends MozLitElement {
     }
   }
 
-  async #loadTopSites() {
+  #loadTopSites() {
     let sites = [];
     try {
-      sites = await lazy.TopSites.getSites();
+      sites = lazy.AboutNewTab.getTopSites();
     } catch (e) {
       lazy.log.error("[TopSites] Failed to load top sites:", e);
     }
@@ -1343,7 +1372,7 @@ export class AIWindow extends MozLitElement {
     }
 
     this.topSites = (sites ?? [])
-      .filter(site => site?.url)
+      .filter(site => site?.url && !site.sponsored_position)
       .slice(0, MAX_TOP_SITES);
 
     if (this.topSites.length) {
@@ -1581,6 +1610,7 @@ export class AIWindow extends MozLitElement {
     const {
       value,
       action,
+      command,
       contextMentions = [],
       contextPageUrl,
       detectedIntent,
@@ -1604,6 +1634,18 @@ export class AIWindow extends MozLitElement {
     this.#smartbar.clearSmartbarInput();
 
     if (action === ACTION.CHAT) {
+      if (
+        lazy.AgentUI.tryHandleCommand({
+          command,
+          value,
+          contextPageUrl,
+          conversation: this.#conversation,
+          window: this.#topChromeWindow,
+        })
+      ) {
+        return;
+      }
+
       const { mergedMentions, allUrls, inlineMentions } = currentMentions;
 
       if (allUrls.size) {
@@ -1675,6 +1717,7 @@ export class AIWindow extends MozLitElement {
           type: mention.type,
           url: mention.id,
           label: mention.label,
+          iconSrc: lazy.UrlbarShared.getIconForUrl(mention.id),
         });
         contextUrls.add(mention.id);
       }
@@ -2038,11 +2081,10 @@ export class AIWindow extends MozLitElement {
       conversation.engine = engine;
       conversation.parameters = parameters;
 
-      // Upsert the system prompt for the current model choice. Idempotent —
-      // no-op if it already matches.
-      await conversation.loadSystemPrompt({
-        modelChoiceIdOverride: this.#selectedModelChoiceId,
-      });
+      // Rewrites the system prompt in place so a restored conversation gets
+      // today's timestamp and the latest RS content. The engine was just built
+      // for this model choice, so its model drives the v2 assembly.
+      await conversation.loadSystemPrompt();
 
       if (inputText) {
         await conversation.generatePrompt(
@@ -2364,7 +2406,8 @@ export class AIWindow extends MozLitElement {
           newMessage.content?.name,
           cfg.label,
           newMessage.content?.body,
-          newMessage.content?.args
+          newMessage.content?.args,
+          cfg.link
         ),
       };
     }
@@ -2660,7 +2703,7 @@ export class AIWindow extends MozLitElement {
       .at(-1);
     const lastToolName =
       lastToolCall?.content?.body?.tool_calls?.[0]?.function?.name;
-    if (lastToolName === "run_search") {
+    if (lastToolName === "search_the_web") {
       const args = lastToolCall.content.body.tool_calls[0].function.arguments;
       try {
         const { query } = JSON.parse(args || "{}");
@@ -2729,6 +2772,15 @@ export class AIWindow extends MozLitElement {
   }
 
   async handleToolUIUpdate(data) {
+    if (lazy.AgentUI.isAgentUpdate(data)) {
+      await lazy.AgentUI.handleUpdate(
+        data,
+        this.#conversation,
+        this.#topChromeWindow
+      );
+      return;
+    }
+
     const success = await lazy.ToolUI.handleUpdate(
       data,
       this.#conversation,
@@ -2807,7 +2859,7 @@ export class AIWindow extends MozLitElement {
       metadata: {
         model: this.modelName,
         turn_count: this.#conversation?.messageCount ?? 0,
-        prompt_version: lazy.FEATURE_MAJOR_VERSIONS[lazy.MODEL_FEATURES.CHAT],
+        prompt_version: this.#conversation?.systemPromptVersion ?? "",
       },
       chatLog: withPageContent,
       chatLogWithoutPageContent: withoutPageContent,

@@ -240,9 +240,7 @@ BrowserGlue.prototype = {
         lazy.PlacesBrowserStartup.backendInitComplete();
         break;
       case "browser-glue-test": // used by tests
-        if (data == "force-ui-migration") {
-          this._migrateUI();
-        } else if (data == "places-browser-init-complete") {
+        if (data == "places-browser-init-complete") {
           lazy.PlacesBrowserStartup.notifyIfInitializationComplete();
         } else if (data == "add-breaches-sync-handler") {
           this._addBreachesSyncHandler();
@@ -1630,7 +1628,7 @@ BrowserGlue.prototype = {
     // Use an increasing number to keep track of the current state of the user's
     // profile, so we can move data around as needed as the browser evolves.
     // Completely unrelated to the current Firefox release number.
-    const APP_DATA_VERSION = 177;
+    const APP_DATA_VERSION = 178;
     const PREF = "browser.migration.version";
 
     let profileDataVersion = Services.prefs.getIntPref(PREF, -1);

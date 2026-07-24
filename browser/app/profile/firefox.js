@@ -79,6 +79,11 @@ pref("extensions.dataCollectionPermissions.enabled", true);
 // Dictionary download preference
 pref("browser.dictionaries.download.url", "https://addons.mozilla.org/%LOCALE%/firefox/language-tools/");
 
+// Whether the Nova Themes picker should be enabled in the about:addons page.
+// (needs also browser.nova.enabled for the Nova Themes picker to be shown
+// in the about:addons page).
+pref("browser.aboutaddons.novaThemesPickerEnabled", true);
+
 // At startup, should we check to see if the installation
 // date is older than some threshold
 pref("app.update.checkInstallTime", true);
@@ -480,6 +485,9 @@ pref("browser.urlbar.deduplication.enabled", true);
 pref("browser.urlbar.deduplication.thresholdDays", 0);
 
 pref("browser.urlbar.scotchBonnet.enableOverride", true);
+
+pref("browser.urlbar.trackerCount.featureGate", true);
+pref("browser.urlbar.trackerCount.enabled", true);
 
 pref("browser.urlbar.trustPanel.featureGate", true);
 pref("browser.urlbar.trustPanel.breachAlerts.featureGate", true);
@@ -1142,6 +1150,8 @@ pref("browser.tabs.hoverPreview.showThumbnails", true);
 pref("browser.tabs.groups.enabled", true);
 pref("browser.tabs.groups.hoverPreview.enabled", true);
 pref("browser.tabs.groups.alternateMenu", false);
+// Bug 2052293: temporarily disabled while tab groups move away from the list all tabs menu.
+pref("browser.tabs.groups.onboardingCallouts.enabled", false);
 
 pref("browser.tabs.groups.smart.enabled", true);
 
@@ -1227,6 +1237,10 @@ pref("browser.tabs.contextmenu.altstructure.enabled", false);
 #endif
 
 pref("browser.ctrlTab.sortByRecentlyUsed", false);
+
+// How many tab thumbnails to show in the ctrl-tab panel, clamped to [4, 49].
+// Only relevant when browser.ctrlTab.sortByRecentlyUsed is true.
+pref("browser.ctrlTab.maxPreviews", 7);
 
 // By default, do not export HTML at shutdown.
 // If true, at shutdown the bookmarks in your menu and toolbar will
@@ -2097,7 +2111,6 @@ pref("browser.newtabpage.activity-stream.discoverystream.pocket-feed-parameters"
 pref("browser.newtabpage.activity-stream.discoverystream.merino-feed-experiment", false);
 
 // List of locales that get thumbs up/down on recommended stories by default.
-pref("browser.newtabpage.activity-stream.discoverystream.thumbsUpDown.locale-thumbs-config", "en-US, en-GB, en-CA");
 
 pref("browser.newtabpage.activity-stream.telemetry.privatePing.enabled", true);
 
@@ -2110,16 +2123,6 @@ pref("browser.newtabpage.activity-stream.telemetry.privatePing.inferredInterests
 
 // surface ID sent from merino to the client from the curated-recommendations request
 pref("browser.newtabpage.activity-stream.telemetry.surfaceId", "");
-
-// List of regions that get thumbs up/down on recommended stories by default.
-#ifdef EARLY_BETA_OR_EARLIER
-  pref("browser.newtabpage.activity-stream.discoverystream.thumbsUpDown.region-thumbs-config", "US, CA");
-#else
-  pref("browser.newtabpage.activity-stream.discoverystream.thumbsUpDown.region-thumbs-config", "US");
-#endif
-
-// Shows users compact layout of Home New Tab page. Also requires region-thumbs-config.
-pref("browser.newtabpage.activity-stream.discoverystream.thumbsUpDown.searchTopsitesCompact", true);
 
 // Displays publisher favicons on recommended stories of New Tab page
 pref("browser.newtabpage.activity-stream.discoverystream.publisherFavicon.enabled", true);
@@ -2325,7 +2328,7 @@ pref("browser.smartwindow.firstrun.hasCompleted", false);
 pref("browser.smartwindow.showThemesNotice", true);
 pref("browser.smartwindow.sidebar.openByDefault", true);
 pref("browser.smartwindow.isDefaultWindow", false);
-pref("browser.smartwindow.firstrun.explainerURL", "https://www.firefox.com/en-US/smart-window/?v=product");
+pref("browser.smartwindow.firstrun.explainerURL", "https://www.firefox.com/smart-window/?v=product");
 pref("places.semanticHistory.smartwindow.featureGate", false);
 // TODO Bug 2053495: remove with mistral release pref
 pref("browser.smartwindow.mistralRelease", false);
@@ -2336,6 +2339,9 @@ pref("browser.smartwindow.autoTabGrouping.maxGroups", 3);
 pref("browser.smartwindow.autoTabGrouping.minTabsPerGroup", 2);
 pref("browser.smartwindow.autoTabGrouping.minCandidateTabs", 4);
 pref("browser.smartwindow.autoTabGrouping.loglevel", "Warn");
+
+// Smart Window Agent
+pref("browser.smartwindow.agent.enabled", false);
 
 // Smart Window: Merino World Cup Soccer tool call (bug 2038266)
 pref("browser.smartwindow.worldcup.enabled", true);
@@ -2351,6 +2357,7 @@ pref("browser.smartwindow.chatHistory.loglevel", "Error");
 pref("browser.smartwindow.chatStore.loglevel", "Error");
 pref("browser.smartwindow.conversation.logLevel", "Error");
 pref("browser.smartwindow.smartbarMentions.loglevel", "Error");
+pref("browser.smartwindow.telemetryLogLevel", "Error");
 
 // Block insecure active content on https pages
 pref("security.mixed_content.block_active_content", true);
@@ -2467,10 +2474,6 @@ pref("media.videocontrols.picture-in-picture.auto-close.enabled", true);
 pref("media.videocontrols.picture-in-picture.auto-close.timeoutMs", 1000);
 
 pref("media.contextmenu.video-overlay-detection", true);
-// TODO (Bug 1817084) - This pref is used for managing translation preferences
-// in the Firefox Translations addon. It should be removed when the addon is
-// removed.
-pref("browser.translation.neverForLanguages", "");
 
 // Enable Firefox translations powered by the Bergamot translations
 // engine https://browser.mt/.
@@ -2637,13 +2640,6 @@ pref("browser.vpn_promo.enabled", true);
 // The most recent list of supported countries can be found at https://support.mozilla.org/en-US/kb/mozilla-vpn-countries-available-subscribe
 // The full lists of supported country codes can also be found at https://github.com/mozilla/bedrock/search?q=VPN_COUNTRY_CODES and https://github.com/mozilla/bedrock/search?q=VPN_MOBILE_SUB_COUNTRY_CODES
 pref("browser.contentblocking.report.vpn_regions", "as,at,au,bd,be,bg,br,ca,ch,cl,co,cy,cz,de,dk,ee,eg,es,fi,fr,gb,gg,gr,hr,hu,id,ie,im,in,io,it,je,ke,kr,lt,lu,lv,ma,mp,mt,mx,my,ng,nl,no,nz,pl,pr,pt,ro,sa,se,sg,si,sk,sn,th,tr,tw,ua,ug,uk,um,us,vg,vi,vn,za");
-
-// Avoid advertising Focus in certain regions.  Comma separated string of two letter
-// ISO 3166-1 country codes.
-pref("browser.promo.focus.disallowed_regions", "cn");
-
-// Default to enabling focus promos to be shown where allowed.
-pref("browser.promo.focus.enabled", true);
 
 // Default to enabling pin promos to be shown where allowed.
 pref("browser.promo.pin.enabled", true);

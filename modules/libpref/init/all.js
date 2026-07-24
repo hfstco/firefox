@@ -97,6 +97,11 @@ pref("browser.cache.frecency_half_life_hours", 6);
 // Don't show "Open with" option on download dialog if true.
 pref("browser.download.forbid_open_with", false);
 
+// Number of milliseconds to wait after requesting character bounds from EditContext
+// for updateCharacterBounds() to be called before giving up and unsuppressing
+// IME notifications.
+pref("dom.editcontext.suppress_notifying_ime_timeout", 300);
+
 // Enable indexedDB logging.
 pref("dom.indexedDB.logging.enabled", true);
 // Detailed output in log messages.
@@ -3147,6 +3152,12 @@ pref("extensions.htmlaboutaddons.inline-options.enabled", true);
 // Show recommendations on the extension and theme list views.
 pref("extensions.htmlaboutaddons.recommendations.enabled", true);
 
+// Whether the Nova Themes picker should be enabled in the about:addons page.
+// (disabled by default here, so that other applications embedding Gecko
+// like Thunderbird will not have it enabled by default, and enabled in the
+// Firefox Desktop prefs).
+pref("browser.aboutaddons.novaThemesPickerEnabled", false);
+
 // The URL for the privacy policy related to recommended add-ons.
 pref("extensions.recommendations.privacyPolicyUrl", "");
 // The URL for a recommended theme, shown on the theme page in about:addons.
@@ -4046,6 +4057,11 @@ pref("extensions.formautofill.creditCards.heuristics.fathom.types", "cc-number,c
 pref("extensions.formautofill.creditCards.heuristics.fathom.confidenceThreshold", "0.5");
 // This is Only for testing! Set the confidence value (> 0 && <= 1) after a field is identified by fathom
 pref("extensions.formautofill.creditCards.heuristics.fathom.testConfidence", "0");
+
+// Passport autofill is still under development; keep it off by default. See
+// extensions.formautofill.addresses.supported above for the "supported" values.
+pref("extensions.formautofill.passports.supported", "off");
+pref("extensions.formautofill.passports.enabled", false);
 
 pref("extensions.formautofill.loglevel", "Warn");
 

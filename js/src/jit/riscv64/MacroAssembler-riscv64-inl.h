@@ -1636,11 +1636,11 @@ void MacroAssembler::maxPtr(Register lhs, ImmWord rhs, Register dest) {
 
 void MacroAssembler::maxDouble(FloatRegister other, FloatRegister srcDest,
                                bool handleNaN) {
-  Float64Max(srcDest, srcDest, other);
+  Float64Max(srcDest, srcDest, other, handleNaN);
 }
 void MacroAssembler::maxFloat32(FloatRegister other, FloatRegister srcDest,
                                 bool handleNaN) {
-  Float32Max(srcDest, srcDest, other);
+  Float32Max(srcDest, srcDest, other, handleNaN);
 }
 void MacroAssembler::memoryBarrier(MemoryBarrier barrier) {
   if (!barrier.isNone()) {
@@ -1649,11 +1649,11 @@ void MacroAssembler::memoryBarrier(MemoryBarrier barrier) {
 }
 void MacroAssembler::minDouble(FloatRegister other, FloatRegister srcDest,
                                bool handleNaN) {
-  Float64Min(srcDest, srcDest, other);
+  Float64Min(srcDest, srcDest, other, handleNaN);
 }
 void MacroAssembler::minFloat32(FloatRegister other, FloatRegister srcDest,
                                 bool handleNaN) {
-  Float32Min(srcDest, srcDest, other);
+  Float32Min(srcDest, srcDest, other, handleNaN);
 }
 void MacroAssembler::move16SignExtend(Register src, Register dest) {
   SignExtendShort(dest, src);
@@ -1692,7 +1692,7 @@ void MacroAssembler::move64To32(Register64 src, Register dest) {
 }
 
 void MacroAssembler::move8ZeroExtend(Register src, Register dest) {
-  andi(dest, src, 0xFF);
+  ZeroExtendByte(dest, src);
 }
 
 void MacroAssembler::move8SignExtend(Register src, Register dest) {

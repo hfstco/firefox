@@ -17,6 +17,7 @@
 #include "nsIContentSecurityPolicy.h"
 #include "nsIHttpChannel.h"
 #include "nsIMultiPartChannel.h"
+#include "nsIScriptElement.h"
 #include "nsITransfer.h"
 #include "nsIURI.h"
 #include "nsNetUtil.h"
@@ -1300,7 +1301,6 @@ static nsLiteralCString sStyleSrcUnsafeInlineAllowList[] = {
     "chrome://formautofill/content/manageAddresses.xhtml"_ns,
     "chrome://formautofill/content/manageCreditCards.xhtml"_ns,
     "chrome://gfxsanity/content/sanityparent.html"_ns,
-    "chrome://gfxsanity/content/sanitytest.html"_ns,
     "chrome://global/content/commonDialog.xhtml"_ns,
     "chrome://global/content/resetProfileProgress.xhtml"_ns,
     "chrome://layoutdebug/content/layoutdebug.xhtml"_ns,

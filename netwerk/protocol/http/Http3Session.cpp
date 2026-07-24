@@ -981,6 +981,12 @@ nsresult Http3Session::ProcessEvents() {
             mStreamIdHash.InsertOrUpdate(wtStream->StreamId(),
                                          std::move(wtStream));
           } break;
+          case WebTransportEventExternal::Tag::Draining:
+            LOG(
+                ("Http3Session::ProcessEvents - "
+                 "WebTransportEventExternal::Tag::Draining [this=%p]",
+                 this));
+            break;
           case WebTransportEventExternal::Tag::Datagram:
             LOG(
                 ("Http3Session::ProcessEvents - "
@@ -3146,6 +3152,13 @@ uint64_t Http3Session::MaxDatagramSize(uint64_t aSessionId) {
   uint64_t size = 0;
   (void)mHttp3Connection->WebTransportMaxDatagramSize(aSessionId, &size);
   return size;
+}
+
+nsresult Http3Session::ExportWebTransportKeyingMaterial(
+    uint64_t aSessionId, const nsTArray<uint8_t>& aLabel,
+    const nsTArray<uint8_t>& aContext, nsTArray<uint8_t>& aKeyingMaterial) {
+  return mHttp3Connection->ExportWebTransportKeyingMaterial(
+      aSessionId, aLabel, aContext, aKeyingMaterial);
 }
 
 void Http3Session::SendHTTPDatagram(uint64_t aStreamId,

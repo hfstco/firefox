@@ -6,7 +6,7 @@ package org.mozilla.fenix.home
 
 import android.annotation.SuppressLint
 import android.content.Intent
-import android.net.ConnectivityManager
+import android.graphics.Rect
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -36,9 +36,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.core.content.getSystemService
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Observer
@@ -88,6 +89,7 @@ import org.mozilla.fenix.browser.BrowserFragmentDirections
 import org.mozilla.fenix.browser.browsingmode.BrowsingMode
 import org.mozilla.fenix.browser.tabstrip.TabStrip
 import org.mozilla.fenix.browser.tabstrip.TabStripColors
+import org.mozilla.fenix.components.Components
 import org.mozilla.fenix.components.HomepageThumbnailIntegration
 import org.mozilla.fenix.components.LensFeature
 import org.mozilla.fenix.components.QrScanFenixFeature
@@ -96,9 +98,9 @@ import org.mozilla.fenix.components.VoiceSearchFeature
 import org.mozilla.fenix.components.accounts.FenixFxAEntryPoint
 import org.mozilla.fenix.components.appstate.AppAction
 import org.mozilla.fenix.components.appstate.AppAction.ContentRecommendationsAction
+import org.mozilla.fenix.components.appstate.AppAction.MessagingAction
 import org.mozilla.fenix.components.appstate.AppAction.MessagingAction.MicrosurveyAction
 import org.mozilla.fenix.components.appstate.AppAction.ReviewPromptAction.CheckIfEligibleForReviewPrompt
-import org.mozilla.fenix.components.appstate.AppAction.SportsWidgetAction
 import org.mozilla.fenix.components.appstate.AppState
 import org.mozilla.fenix.components.components
 import org.mozilla.fenix.components.metrics.installSourcePackage
@@ -107,7 +109,6 @@ import org.mozilla.fenix.compose.snackbar.SnackbarState
 import org.mozilla.fenix.ext.application
 import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.ext.hideToolbar
-import org.mozilla.fenix.ext.isOnline
 import org.mozilla.fenix.ext.nav
 import org.mozilla.fenix.ext.recordEventInNimbus
 import org.mozilla.fenix.ext.requireComponents
@@ -130,8 +131,6 @@ import org.mozilla.fenix.home.sessioncontrol.DefaultSessionControlController
 import org.mozilla.fenix.home.sessioncontrol.SessionControlController
 import org.mozilla.fenix.home.sessioncontrol.SessionControlControllerCallback
 import org.mozilla.fenix.home.sessioncontrol.SessionControlInteractor
-import org.mozilla.fenix.home.sports.DefaultSportsController
-import org.mozilla.fenix.home.sports.SportCardErrorState
 import org.mozilla.fenix.home.store.HomeToolbarStoreBuilder
 import org.mozilla.fenix.home.store.HomepageState
 import org.mozilla.fenix.home.termsofuse.DefaultPrivacyNoticeBannerController
@@ -157,8 +156,7 @@ import org.mozilla.fenix.nimbus.FxNimbus
 import org.mozilla.fenix.onboarding.OnboardingFragmentDirections
 import org.mozilla.fenix.onboarding.OnboardingReason
 import org.mozilla.fenix.onboarding.OnboardingTelemetryRecorder
-import org.mozilla.fenix.onboarding.continuous.ContinuousOnboardingFeatureDefault
-import org.mozilla.fenix.onboarding.continuous.ContinuousOnboardingStageProviderDefault
+import org.mozilla.fenix.onboarding.continuous.ContinuousOnboardingFeature
 import org.mozilla.fenix.pbmlock.NavigationOrigin
 import org.mozilla.fenix.pbmlock.observePrivateModeLock
 import org.mozilla.fenix.perf.MarkersFragmentLifecycleCallbacks
@@ -185,6 +183,7 @@ import org.mozilla.fenix.utils.showAddSearchWidgetPromptIfSupported
 import org.mozilla.fenix.wallpapers.LocalWallpaperState
 import org.mozilla.fenix.wallpapers.Wallpaper
 import java.lang.ref.WeakReference
+import kotlin.math.roundToInt
 import org.mozilla.fenix.ipprotection.store.Surface as IPProtectionSurface
 
 /**
@@ -248,6 +247,9 @@ class HomeFragment : Fragment() {
     private val toolbarView: FenixHomeToolbar
         get() = nullableToolbarView!!
 
+    // Bounds of the homepage content (excluding the toolbar and system bar padding) used to crop the tab thumbnail.
+    private var homepageContentBounds: Rect? = null
+
     @VisibleForTesting
     internal val messagingFeatureHomescreen = ViewBoundFeatureWrapper<MessagingFeature>()
 
@@ -266,6 +268,7 @@ class HomeFragment : Fragment() {
     private val trackersBlockedFeature = ViewBoundFeatureWrapper<TrackersBlockedFeature>()
     private val ipProtectionWarningBinding = ViewBoundFeatureWrapper<IPProtectionWarningBinding>()
     private val ipProtectionOnboardingPrompt = ViewBoundFeatureWrapper<IPProtectionOnboardingPrompt>()
+    private val continuousOnboardingFeature = ViewBoundFeatureWrapper<ContinuousOnboardingFeature>()
 
     private val homepageEdgeToEdgeFeature = ViewBoundFeatureWrapper<HomepageEdgeToEdgeFeature>()
     private var qrScanFenixFeature: ViewBoundFeatureWrapper<QrScanFenixFeature>? =
@@ -318,10 +321,7 @@ class HomeFragment : Fragment() {
 
     private val continuousOnboardingDefaultBrowserLauncher: ActivityResultLauncher<Intent> =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            continuousOnboardingFeature.onDefaultBrowserStepCompleted(
-                activity = requireActivity(),
-                resultCode = result.resultCode,
-            )
+            continuousOnboardingFeature.get()?.onDefaultBrowserStepCompleted(result.resultCode)
         }
 
     private val telemetryRecorder by lazy {
@@ -335,23 +335,6 @@ class HomeFragment : Fragment() {
                 packageManager = requireContext().application.packageManager,
                 packageName = requireContext().application.packageName,
             ),
-        )
-    }
-
-    private val continuousOnboardingFeature by lazy {
-        val settings = requireComponents.settings
-        ContinuousOnboardingFeatureDefault(
-            settings = settings,
-            telemetryRecorder = telemetryRecorder,
-            stageProvider = ContinuousOnboardingStageProviderDefault(settings),
-            navigateToSyncSignIn = {
-                findNavController().nav(
-                    id = R.id.homeFragment,
-                    directions = OnboardingFragmentDirections.actionGlobalTurnOnSync(
-                        entrypoint = FenixFxAEntryPoint.NewUserOnboarding,
-                    ),
-                )
-            },
         )
     }
 
@@ -533,6 +516,7 @@ class HomeFragment : Fragment() {
         initTabsCleanupFeature(view = view)
         initSnackbarBinding(view = view)
         initIpProtectionBindings(view = view)
+        initContinuousOnboardingFeature()
 
         privacyNoticeBannerStore = PrivacyNoticeBannerStore(
             initialState = PrivacyNoticeBannerState(
@@ -548,11 +532,6 @@ class HomeFragment : Fragment() {
 
         initController()
         initInteractor()
-
-        continuousOnboardingFeature.maybeRunContinuousOnboarding(
-            activity = requireActivity(),
-            launcher = continuousOnboardingDefaultBrowserLauncher,
-        )
 
         // DO NOT MOVE ANYTHING BELOW THIS addMarker CALL!
         requireComponents.core.engine.profiler?.addMarker(
@@ -722,7 +701,16 @@ class HomeFragment : Fragment() {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
+                .padding(innerPadding)
+                .onGloballyPositioned { coordinates ->
+                    val bounds = coordinates.boundsInRoot()
+                    homepageContentBounds = Rect(
+                        bounds.left.roundToInt(),
+                        bounds.top.roundToInt(),
+                        bounds.right.roundToInt(),
+                        bounds.bottom.roundToInt(),
+                    )
+                },
         ) {
             Homepage(
                 state = HomepageState.build(
@@ -992,33 +980,16 @@ class HomeFragment : Fragment() {
         // update it manually here.
         components.useCases.sessionUseCases.updateLastAccess()
 
-        val sportsWidgetState = components.appStore.state.sportsWidgetState
-        val needsFetch = sportsWidgetState.hasWorldCupStarted || sportsWidgetState.isOneWeekToWorldCup
-        if (sportsWidgetState.isShown && (needsFetch || sportsWidgetState.isCountdownShown)) {
-            // Fetches the full tournament schedule once we're within seven days of kickoff
-            // or past it. The middleware caches the response so a later team selection
-            // re-derives cards without another network call.
-            //
-            // When offline, skip the fetch and surface ConnectionInterrupted so the widget
-            // shows an error card instead of the countdown / promo flow. Countdown mode
-            // (pre-7-day window) has no data to fetch, but still flips to the error card
-            // when offline so the user knows the widget isn't current. Conversely, when
-            // back online with nothing to fetch (countdown phase), clear any stale error
-            // so the countdown UI returns without requiring a manual Refresh tap.
-            val isOnline = requireContext().getSystemService<ConnectivityManager>()?.isOnline() == true
-            val action = when {
-                !isOnline -> SportsWidgetAction.FetchFailed(SportCardErrorState.ConnectionInterrupted)
-                needsFetch -> SportsWidgetAction.FetchMatches
-                else -> SportsWidgetAction.ErrorStateCleared
-            }
-            components.appStore.dispatch(action)
-        }
+        evaluateMessagesForMicrosurvey(components)
 
         BiometricAuthenticationManager.biometricAuthenticationNeededInfo.shouldShowAuthenticationPrompt =
             true
         BiometricAuthenticationManager.biometricAuthenticationNeededInfo.authenticationStatus =
             AuthenticationStatus.NOT_AUTHENTICATED
     }
+
+    private fun evaluateMessagesForMicrosurvey(components: Components) =
+        components.appStore.dispatch(MessagingAction.Evaluate(FenixMessageSurfaceId.MICROSURVEY))
 
     override fun onPause() {
         super.onPause()
@@ -1207,6 +1178,7 @@ class HomeFragment : Fragment() {
                 view = view,
                 store = requireComponents.core.store,
                 appStore = requireComponents.appStore,
+                homepageContentBounds = { homepageContentBounds },
             ),
             owner = this,
             view = view,
@@ -1299,6 +1271,23 @@ class HomeFragment : Fragment() {
         )
     }
 
+    private fun initContinuousOnboardingFeature() {
+        ContinuousOnboardingFeature.register(
+            fragment = this,
+            binding = continuousOnboardingFeature,
+            launcher = continuousOnboardingDefaultBrowserLauncher,
+            telemetryRecorder = telemetryRecorder,
+            navigateToSyncSignIn = {
+                findNavController().nav(
+                    id = R.id.homeFragment,
+                    directions = OnboardingFragmentDirections.actionGlobalTurnOnSync(
+                        entrypoint = FenixFxAEntryPoint.NewUserOnboarding,
+                    ),
+                )
+            },
+        )
+    }
+
     @Suppress("LongMethod")
     private fun initInteractor() {
         _sessionControlInteractor = SessionControlInteractor(
@@ -1366,17 +1355,6 @@ class HomeFragment : Fragment() {
                 longFoxFeature = requireComponents.core.longFoxFeature,
                 context = requireActivity(),
                 longFoxEnabled = requireComponents.settings.longfoxEnabled,
-            ),
-            sportsController = DefaultSportsController(
-                appStore = requireComponents.appStore,
-                settings = requireComponents.settings,
-                navController = findNavController(),
-                fenixBrowserUseCases = requireComponents.useCases.fenixBrowserUseCases,
-                browserStore = requireComponents.core.store,
-                shareUseCases = requireComponents.useCases.shareUseCases,
-                worldCupLabel = getString(R.string.customize_toggle_world_cup),
-                shareCardTitle = getString(R.string.sports_widget_card_title),
-                connectivityManager = requireContext().getSystemService<ConnectivityManager>(),
             ),
         )
     }

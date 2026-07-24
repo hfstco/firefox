@@ -112,6 +112,7 @@ use crate::space::{SnapRounding, SpaceMapper, SpaceSnapper};
 use crate::util::{extract_inner_rect_safe, project_rect, MatrixHelpers, MaxRect, ScaleOffset};
 use euclid::approxeq::ApproxEq;
 use std::{iter, ops, u32, mem};
+use std::hash::{Hash, Hasher};
 
 /// A (non-leaf) node inside a clip-tree
 #[cfg_attr(feature = "capture", derive(Serialize))]
@@ -132,7 +133,7 @@ pub struct ClipTreeNode {
     /// each edge on its own — which would make the fake-border sides thicken at
     /// different times as the spread animates, and the ring width breathe as
     /// the element re-snaps under motion (bug 2052033).
-    pub snap_outset: Au,
+    pub snap_outset: f32,
     pub parent: ClipNodeId,
 
     children: FastHashMap<ClipEntry, ClipNodeId>,
@@ -157,7 +158,7 @@ impl ClipTreeNode {
     ) -> LayoutRect {
         debug_assert!(self.spatial_node_index != SpatialNodeIndex::INVALID);
         snapper.set_target_spatial_node(self.spatial_node_index, spatial_tree);
-        let outset = self.snap_outset.to_f32_px();
+        let outset = self.snap_outset;
         if outset != 0.0 {
             // Anchor to the snapped source rect: inflate out by the outset to
             // recover it (e.g. the box-shadow element), snap that, then inset
@@ -260,7 +261,7 @@ impl ClipTree {
                     handle: ClipDataHandle::INVALID,
                     spatial_node_index: SpatialNodeIndex::INVALID,
                     unsnapped_clip_rect: LayoutRect::zero(),
-                    snap_outset: Au(0),
+                    snap_outset: 0.0,
                     children: FastHashMap::default(),
                     parent: ClipNodeId::NONE,
                 }
@@ -278,7 +279,7 @@ impl ClipTree {
             handle: ClipDataHandle::INVALID,
             spatial_node_index: SpatialNodeIndex::INVALID,
             unsnapped_clip_rect: LayoutRect::zero(),
-            snap_outset: Au(0),
+            snap_outset: 0.0,
             children: FastHashMap::default(),
             parent: ClipNodeId::NONE,
         });
@@ -488,15 +489,30 @@ impl ClipTree {
 }
 
 /// A reference to an interned clip paired with the spatial node that positions it.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, MallocSizeOf)]
+#[derive(Copy, Clone, PartialEq, MallocSizeOf)]
 #[cfg_attr(feature = "capture", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct ClipEntry {
     pub handle: ClipDataHandle,
     pub spatial_node_index: SpatialNodeIndex,
     pub clip_rect: RectKey,
-    /// Propagated to `ClipTreeNode::snap_outset`. See that field.
-    pub snap_outset: Au,
+    /// Propagated to `ClipTreeNode::snap_outset`. See that field. Kept as an
+    /// exact `f32` (not quantized to `Au`) so the box-shadow anchor reconstructs
+    /// the source rect precisely: a sub-app-unit rounding error here can flip a
+    /// clip edge that lands on a device-pixel tie to the opposite pixel, leaving
+    /// one side of a fake-border ring a pixel thin (bug 2051177).
+    pub snap_outset: f32,
+}
+
+impl Eq for ClipEntry {}
+
+impl Hash for ClipEntry {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.handle.hash(state);
+        self.spatial_node_index.hash(state);
+        self.clip_rect.hash(state);
+        self.snap_outset.to_bits().hash(state);
+    }
 }
 
 /// Represents a clip-chain as defined by the public API that we decompose in to
@@ -587,7 +603,7 @@ impl ClipTreeBuilder {
         spatial_node_index: SpatialNodeIndex,
         clip_rect: LayoutRect,
     ) {
-        self.clip_map.insert(id, ClipEntry { handle, spatial_node_index, clip_rect: clip_rect.into(), snap_outset: Au(0) });
+        self.clip_map.insert(id, ClipEntry { handle, spatial_node_index, clip_rect: clip_rect.into(), snap_outset: 0.0 });
     }
 
     /// Define a new rounded rect clip
@@ -597,7 +613,7 @@ impl ClipTreeBuilder {
         handle: ClipDataHandle,
         spatial_node_index: SpatialNodeIndex,
         clip_rect: LayoutRect,
-        snap_outset: Au,
+        snap_outset: f32,
     ) {
         self.clip_map.insert(id, ClipEntry { handle, spatial_node_index, clip_rect: clip_rect.into(), snap_outset });
     }
@@ -610,7 +626,7 @@ impl ClipTreeBuilder {
         spatial_node_index: SpatialNodeIndex,
         clip_rect: LayoutRect,
     ) {
-        self.clip_map.insert(id, ClipEntry { handle, spatial_node_index, clip_rect: clip_rect.into(), snap_outset: Au(0) });
+        self.clip_map.insert(id, ClipEntry { handle, spatial_node_index, clip_rect: clip_rect.into(), snap_outset: 0.0 });
     }
 
     /// Define a clip-chain
@@ -1542,15 +1558,22 @@ impl ClipStore {
             let clip_rect = match clip_snap {
                 ClipSnap::Nearest =>
                     node.snapped_clip_rect(snapper, spatial_tree, SnapRounding::Nearest),
-                // A device-space text run rounds its clip *out* on the
-                // non-sub-pixel axis: the glyph is snapped to the device grid on
-                // that axis, so an exact fractional clip edge would shave a whole
-                // glyph row whose center lies just beyond it. Rounding out keeps
-                // the snapped glyph's own rows while never rounding a clip edge
-                // inward, so it can't shave the last glyph the way snapping used
-                // to (bug 2050692, bug 2055145).
-                ClipSnap::Text(rounding) =>
-                    node.snapped_clip_rect(snapper, spatial_tree, rounding),
+                // An *ancestor* clip of a device-space text run (an overflow
+                // clip, table-cell edge, scroll frame, etc.) rounds out on BOTH
+                // axes. The glyph is snapped to the device grid on its
+                // non-sub-pixel axis always, and on its sub-pixel axis when it
+                // has no sub-pixel positioning (a bitmap strike, e.g. MS UI
+                // Gothic), so an exact fractional container edge would shave a
+                // whole glyph column/row whose ink lies just beyond it. Rounding
+                // out keeps the snapped glyph while never moving an edge inward,
+                // so it can't shave the first or last glyph
+                // (bug 2050692 / bug 2055145 / bug 2056856). The run's OWN leaf
+                // clip is instead kept exact on the sub-pixel axis (see
+                // `snap_policy` / the visibility pass): rounding it out would
+                // over-reveal a sub-pixel column of an adjacent run at an inline
+                // boundary, and the leaf never causes the container-shave.
+                ClipSnap::Text(_) =>
+                    node.snapped_clip_rect(snapper, spatial_tree, SnapRounding::RoundOut),
                 // Surface / other device-space prim: leave the clip exact.
                 ClipSnap::Exact => node.unsnapped_clip_rect,
             };

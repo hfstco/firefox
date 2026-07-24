@@ -63,6 +63,7 @@ pub mod interned_prims;
 /// shared with the `webrender` crate. Not part of the public API surface.
 #[doc(hidden)]
 pub mod prim_geometry;
+mod fast_transform;
 mod tile_pool;
 pub mod units;
 
@@ -73,6 +74,7 @@ pub use crate::font::*;
 pub use crate::gradient_builder::*;
 pub use crate::image::*;
 pub use crate::tile_pool::*;
+pub use crate::fast_transform::*;
 
 use crate::units::*;
 use crate::channel::Receiver;
@@ -134,6 +136,16 @@ pub struct IdNamespace(pub u32);
 impl IdNamespace {
     pub const DEBUGGER: IdNamespace = IdNamespace(!0);
 }
+
+/// Identifies a window registered on a render backend thread.
+///
+/// Currently every render backend thread serves a single window, so each
+/// backend has exactly one `RenderBackendId`. The indirection is in place
+/// so that a future step can let multiple windows share a single render
+/// backend thread, with messages routed to the right window via this id.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Ord, PartialOrd)]
+pub struct RenderBackendId(pub u32);
 
 /// A key uniquely identifying a WebRender document.
 ///

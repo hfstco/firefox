@@ -296,6 +296,18 @@ Is the launch on login option enabled?
 declare const launchOnLoginEnabled: boolean;
 ```
 
+### `launchOnLoginAllowedByPolicy`
+
+Whether launch on login is allowed to be enabled, i.e. it has not been overridden
+by Windows Settings or enterprise policy. Mirrors the `isAllowedByPolicy` value
+from `getLaunchOnLoginEnablementDetails()`. Always `false` on non-Windows
+platforms. Use together with `launchOnLoginEnabled` to target users who do not
+have launch on login enabled but for whom it could be enabled.
+
+```ts
+declare const launchOnLoginAllowedByPolicy: boolean;
+```
+
 ### `locale`
 The current UI locale of the browser including country code, e.g. `en-US`. This is
 the locale Firefox chose to render its UI in: the first match between Firefox's
@@ -1459,6 +1471,26 @@ The number of days since the most recent crash, as recorded in the [dump files c
 
 ```ts
 declare const daysSinceLastCrash: Promise<number|null>;
+```
+
+### `crashCountInLastDay`
+
+The number of crashes the user has experienced in the last 24 hours, as recorded in the [dump files corresponding to submitted crashes](https://searchfox.org/firefox-main/source/toolkit/components/crashes/CrashManager.in.sys.mjs#297-322). This targeting is only available for Mac and Windows users; Linux users will always return a `crashCountInLastDay` of 0.
+
+#### Definition
+
+```ts
+declare const crashCountInLastDay: Promise<number>;
+```
+
+### `crashCountInLastWeek`
+
+The number of crashes the user has experienced in the last 7 days, as recorded in the [dump files corresponding to submitted crashes](https://searchfox.org/firefox-main/source/toolkit/components/crashes/CrashManager.in.sys.mjs#297-322). This targeting is only available for Mac and Windows users; Linux users will always return a `crashCountInLastWeek` of 0.
+
+#### Definition
+
+```ts
+declare const crashCountInLastWeek: Promise<number>;
 ```
 
 ### `isLaunchOnLogin`

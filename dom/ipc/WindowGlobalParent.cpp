@@ -21,6 +21,7 @@
 #include "mozilla/ServoStyleSet.h"
 #include "mozilla/StaticPrefs_dom.h"
 #include "mozilla/StaticPrefs_network.h"
+#include "mozilla/StoragePrincipalHelper.h"
 #include "mozilla/dom/BrowserBridgeParent.h"
 #include "mozilla/dom/BrowserHost.h"
 #include "mozilla/dom/BrowserParent.h"
@@ -29,6 +30,7 @@
 #include "mozilla/dom/ChromeUtils.h"
 #include "mozilla/dom/ClientIPCTypes.h"
 #include "mozilla/dom/ClientInfo.h"
+#include "mozilla/dom/ClientValidation.h"
 #include "mozilla/dom/ContentChild.h"
 #include "mozilla/dom/ContentParent.h"
 #include "mozilla/dom/DOMException.h"
@@ -562,6 +564,42 @@ mozilla::ipc::IPCResult WindowGlobalParent::RecvUpdateHttpsOnlyStatus(
   return IPC_OK();
 }
 
+already_AddRefed<Promise> WindowGlobalParent::RequestDocumentLanguageMetadata(
+    const DocumentLanguageMetadataRequestOptions& aOptions, ErrorResult& aRv) {
+  nsIGlobalObject* global = GetParentObject();
+  RefPtr<Promise> domPromise = Promise::Create(global, aRv);
+  if (NS_WARN_IF(aRv.Failed())) {
+    return nullptr;
+  }
+
+  MOZ_ASSERT(aOptions.mTextSampleMinCodeUnits <=
+             aOptions.mTextSampleTargetCodeUnits);
+
+  if (!IsCurrentGlobal()) {
+    domPromise->MaybeResolve(JS::NullHandleValue);
+    return domPromise.forget();
+  }
+
+  auto ipcPromise = SendRequestDocumentLanguageMetadata(
+      aOptions.mTextSampleMinCodeUnits, aOptions.mTextSampleTargetCodeUnits);
+  ipcPromise->Then(
+      GetMainThreadSerialEventTarget(), __func__,
+      [domPromise,
+       self = RefPtr{this}](const Maybe<DocumentLanguageMetadata>& aMetadata) {
+        if (!self->IsCurrentGlobal() || aMetadata.isNothing()) {
+          domPromise->MaybeResolve(JS::NullHandleValue);
+          return;
+        }
+
+        domPromise->MaybeResolve(*aMetadata);
+      },
+      [domPromise](ResponseRejectReason&&) {
+        domPromise->MaybeResolve(JS::NullHandleValue);
+      });
+
+  return domPromise.forget();
+}
+
 IPCResult WindowGlobalParent::RecvUpdateDocumentHasLoaded(
     bool aDocumentHasLoaded) {
   mDocumentHasLoaded = aDocumentHasLoaded;
@@ -588,6 +626,10 @@ IPCResult WindowGlobalParent::RecvUpdateDocumentCspSettings(
 
 mozilla::ipc::IPCResult WindowGlobalParent::RecvSetClientInfo(
     const IPCClientInfo& aIPCClientInfo) {
+  if (!ClientIsValidPrincipalInfo(aIPCClientInfo.principalInfo(),
+                                  GetRemoteType())) {
+    return IPC_FAIL(this, "SetClientInfo principal not valid for remote type");
+  }
   mClientInfo = Some(ClientInfo(aIPCClientInfo));
   return IPC_OK();
 }

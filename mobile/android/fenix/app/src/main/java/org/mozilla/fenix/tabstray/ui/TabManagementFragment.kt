@@ -23,6 +23,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -31,6 +32,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.fragment.app.Fragment
@@ -55,13 +57,14 @@ import mozilla.components.feature.accounts.push.CloseTabsUseCases
 import mozilla.components.feature.downloads.ui.DownloadCancelDialogFragment
 import mozilla.components.lib.state.helpers.StoreProvider.Companion.storeProvider
 import mozilla.components.support.base.feature.ViewBoundFeatureWrapper
+import mozilla.components.support.ktx.android.view.setNavigationBarTheme
+import mozilla.components.support.ktx.android.view.setStatusBarTheme
 import mozilla.telemetry.glean.private.NoExtras
 import org.mozilla.fenix.Config
 import org.mozilla.fenix.GleanMetrics.PrivateBrowsingLocked
 import org.mozilla.fenix.GleanMetrics.TabsTray
 import org.mozilla.fenix.HomeActivity
 import org.mozilla.fenix.R
-import org.mozilla.fenix.components.appstate.AppAction
 import org.mozilla.fenix.compose.navigation.BottomSheetSceneStrategy
 import org.mozilla.fenix.ext.actualInactiveTabs
 import org.mozilla.fenix.ext.components
@@ -270,6 +273,8 @@ class TabManagementFragment : Fragment() {
             }
 
             FirefoxTheme(theme = TabManagerThemeProvider(selectedPage = state.selectedPage).provideTheme()) {
+                val statusBarColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                val navigationBarColor = MaterialTheme.colorScheme.surface
                 val transitionColor = MaterialTheme.colorScheme.surfaceContainer
 
                 val tabTrayVisibilityState = remember {
@@ -306,6 +311,20 @@ class TabManagementFragment : Fragment() {
                             performTabClick(tab = it)
                         }
                     }
+                }
+
+                // The TabManagementFragment theme changes independently of browsing mode, so we have
+                // opted out of StatusBarColorManager and must manually manage our system bar colors.
+                // Note that when edge-to-edge is enabled, these helpers are still needed to update the
+                // icon/text color via isAppearanceLightStatusBars, and when edge-to-edge is disabled
+                // they also set the bar background colors.
+                // Note: We prefer DisposableEffect over LaunchedEffect here because it is synchronous
+                // and avoids a flicker where statusbar and toolbar don't match.
+                DisposableEffect(statusBarColor, navigationBarColor) {
+                    val window = activity?.window
+                    window?.setStatusBarTheme(statusBarColor.toArgb())
+                    window?.setNavigationBarTheme(navigationBarColor.toArgb())
+                    onDispose { }
                 }
 
                 AnimatedVisibility(
@@ -876,14 +895,6 @@ class TabManagementFragment : Fragment() {
         // is guaranteed after that.
         recordBreadcrumb("TabManagementFragment dismissTabManager")
         navController.popBackStack()
-
-        val shouldLockPrivateMode = requireComponents.settings.privateBrowsingLockedFeatureEnabled &&
-            !requireComponents.appStore.state.mode.isPrivate
-        if (shouldLockPrivateMode) {
-            requireComponents.appStore.dispatch(
-                AppAction.PrivateBrowsingLockAction.UpdatePrivateBrowsingLock(isLocked = true),
-            )
-        }
     }
 
     /**

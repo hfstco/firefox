@@ -10,6 +10,7 @@ import android.content.Context
 import android.content.Context.MODE_PRIVATE
 import android.content.SharedPreferences
 import android.content.pm.ShortcutManager
+import android.content.res.Resources
 import android.os.Environment
 import android.view.accessibility.AccessibilityManager
 import androidx.annotation.VisibleForTesting
@@ -472,6 +473,11 @@ class Settings(
 
     var isUserXTwitterAttributed by booleanPreference(
         appContext.getPreferenceKey(R.string.pref_key_is_user_x_twitter_attributed),
+        default = false,
+    )
+
+    var isUserMolocoAttributed by booleanPreference(
+        appContext.getPreferenceKey(R.string.pref_key_is_user_moloco_attributed),
         default = false,
     )
 
@@ -2520,87 +2526,6 @@ class Settings(
     )
 
     /**
-     * Indicates if Homepage Sports Widget is enabled.
-     */
-    var enableHomepageSportsWidget by booleanPreference(
-        key = appContext.getPreferenceKey(R.string.pref_key_enable_homepage_sports_widget),
-        default = { FxNimbus.features.homepageSportsWidget.value().enabled },
-    )
-
-    /**
-     * Nimbus override: when true, treat the user as being within one week of the World Cup
-     * kickoff regardless of the device date. The natural date-based check still applies when
-     * false (the default).
-     */
-    val forceOneWeekToWorldCup: Boolean
-        get() = FxNimbus.features.homepageSportsWidget.value().forceOneWeekToWorldCup
-
-    /**
-     * Nimbus-controlled minimum interval, in seconds, between Sports Widget fetches.
-     * Backed by the `fetch-throttle-seconds` variable (default 60s). Read at construction
-     * time of [org.mozilla.fenix.home.sports.SportsWidgetMiddleware]; Nimbus updates take
-     * effect on the next app launch.
-     */
-    val sportsWidgetFetchThrottleSeconds: Int
-        get() = FxNimbus.features.homepageSportsWidget.value().fetchThrottleSeconds
-
-    /**
-     * Debug-only: when true, the Homepage Sports Widget calls the GCP-hosted mock World
-     * Cup server instead of production Merino. Combined with [mockWorldCupServerSession],
-     * the device hits the mock's `<session-id>/api/v1/wcs/...` routes so QA can simulate
-     * any tournament state ahead of kickoff.
-     */
-    var useMockWorldCupServer by booleanPreference(
-        key = appContext.getPreferenceKey(R.string.pref_key_use_mock_world_cup_server),
-        default = false,
-    )
-
-    /**
-     * Debug-only: session prefix issued by the mock server's UI (e.g. `jolly-narwhal-39`).
-     * Required when [useMockWorldCupServer] is true.
-     */
-    var mockWorldCupServerSession by stringPreference(
-        key = appContext.getPreferenceKey(R.string.pref_key_mock_world_cup_server_session),
-        default = "",
-    )
-
-    /**
-     * Indicates if the Homepage Sports Widget should be visible on the homepage.
-     * This is the user-controlled visibility toggle, independent of the
-     * [enableHomepageSportsWidget] feature flag.
-     */
-    var showHomepageSportsWidget by booleanPreference(
-        key = appContext.getPreferenceKey(R.string.pref_key_show_homepage_sports_widget),
-        default = true,
-    )
-
-    /**
-     * Indicates if the Homepage Countdown Widget should be visible on the homepage.
-     * This is independent of the [enableHomepageSportsWidget] feature flag and [showHomepageSportsWidget] setting.
-     */
-    var showHomepageCountdownWidget by booleanPreference(
-        key = appContext.getPreferenceKey(R.string.pref_key_show_homepage_countdown_widget),
-        default = true,
-    )
-
-    /**
-     * The set of ISO codes of the user's selected countries to follow for the sports widget.
-     */
-    var sportsSelectedCountries by stringSetPreference(
-        appContext.getPreferenceKey(R.string.pref_key_sports_selected_countries),
-        default = setOf(),
-    )
-
-    /**
-     * Whether the user has dismissed the sports widget "Follow your team" card via the
-     * "Skip" action. When true, the "Follow your team" card is not shown again.
-     */
-    var hasSkippedSportsFollowTeam by booleanPreference(
-        key = appContext.getPreferenceKey(R.string.pref_key_sports_has_skipped_follow_team),
-        default = false,
-    )
-
-    /**
      * Adjust Activated User sent
      */
     var growthUserActivatedSent by booleanPreference(
@@ -2725,20 +2650,22 @@ class Settings(
 
     /**
      * Returns the height of the browser toolbar height.
+     *
+     * @param uiContext Activity/Fragment/View [Context] with [Resources] matching the display
+     * the UI is currently rendered on. Don't use application's context!
      */
-    val browserToolbarHeight: Int
-        get() {
-            val isTallWindow = appContext.resources.configuration.screenHeightDp > TALL_SCREEN_HEIGHT_DP
-            val isWideWindow = appContext.resources.configuration.screenWidthDp > WIDE_SCREEN_WIDTH_DP
-            val isBottomExpandedOnTallNarrowWindow = toolbarPosition == ToolbarPosition.BOTTOM &&
-                shouldUseExpandedToolbar && isTallWindow && !isWideWindow
-            val dimen = if (isBottomExpandedOnTallNarrowWindow) {
-                R.dimen.composable_browser_toolbar_height_small
-            } else {
-                R.dimen.composable_browser_toolbar_height
-            }
-            return appContext.pixelSizeFor(dimen)
+    fun getBrowserToolbarHeight(uiContext: Context): Int {
+        val isTallWindow = uiContext.resources.configuration.screenHeightDp > TALL_SCREEN_HEIGHT_DP
+        val isWideWindow = uiContext.resources.configuration.screenWidthDp > WIDE_SCREEN_WIDTH_DP
+        val isBottomExpandedOnTallNarrowWindow = toolbarPosition == ToolbarPosition.BOTTOM &&
+            shouldUseExpandedToolbar && isTallWindow && !isWideWindow
+        val dimen = if (isBottomExpandedOnTallNarrowWindow) {
+            R.dimen.composable_browser_toolbar_height_small
+        } else {
+            R.dimen.composable_browser_toolbar_height
         }
+        return uiContext.pixelSizeFor(dimen)
+    }
 
     /**
      * Indicates if the microsurvey feature is enabled.
@@ -2799,6 +2726,12 @@ class Settings(
         key = appContext.getPreferenceKey(R.string.pref_key_has_shown_ip_protection_prompt),
         default = false,
     )
+
+    /**
+     * Indicates if the IPProtection onboarding bottom sheet feature variable is enabled via Nimbus.
+     */
+    val shouldShowIPProtectionOnboardingBottomSheet: Boolean
+        get() = FxNimbus.features.ipProtection.value().showOnboardingBottomSheet
 
     /**
      * Indicates if the IPProtection feature is available for the user.
@@ -2889,6 +2822,15 @@ class Settings(
     var importPasswordsFeatureFlagEnabled by booleanPreference(
         key = appContext.getPreferenceKey(R.string.pref_key_enable_import_passwords),
         default = Config.channel.isDebug,
+    )
+
+    /**
+     * Feature flag that indicates if the "Check Archived Version" button is shown on eligible
+     * error pages. Off by default; the toggle is only exposed via secret settings on Nightly.
+     */
+    var isWaybackMachineEnabled by booleanPreference(
+        key = appContext.getPreferenceKey(R.string.pref_key_enable_wayback_machine),
+        default = false,
     )
 
     /**

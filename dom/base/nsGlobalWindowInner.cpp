@@ -140,6 +140,7 @@
 #include "mozilla/dom/Location.h"
 #include "mozilla/dom/MediaDevices.h"
 #include "mozilla/dom/MediaKeys.h"
+#include "mozilla/dom/ModuleLoader.h"
 #include "mozilla/dom/Navigation.h"
 #include "mozilla/dom/NavigatorBinding.h"
 #include "mozilla/dom/Nullable.h"
@@ -2466,6 +2467,7 @@ nsresult nsGlobalWindowInner::PostHandleEvent(EventChainPostVisitor& aVisitor) {
     // Tell the parent process that the document is not loaded.
     if (mWindowGlobalChild) {
       mWindowGlobalChild->SendUpdateDocumentHasLoaded(mIsDocumentLoaded);
+      mWindowGlobalChild->OnDocumentUnloaded();
     }
   } else if (aVisitor.mEvent->mMessage == eLoad &&
              aVisitor.mEvent->IsTrusted()) {
@@ -2475,6 +2477,7 @@ nsresult nsGlobalWindowInner::PostHandleEvent(EventChainPostVisitor& aVisitor) {
     // Tell the parent process that the document is loaded.
     if (mWindowGlobalChild) {
       mWindowGlobalChild->SendUpdateDocumentHasLoaded(mIsDocumentLoaded);
+      mWindowGlobalChild->OnDocumentLoaded();
     }
 
     mTimeoutManager->OnDocumentLoaded();

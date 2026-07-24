@@ -77,6 +77,8 @@ enum class EGLLibExtension {
   ANGLE_display_power_preference,
   ANGLE_platform_angle,
   ANGLE_platform_angle_d3d,
+  ANGLE_platform_angle_metal,
+  ANGLE_platform_angle_device_id,
   EXT_device_enumeration,
   EXT_device_query,
   EXT_platform_device,
@@ -149,6 +151,7 @@ class GLLibraryEGL final {
   PRLibrary* mEGLLibrary = nullptr;
   PRLibrary* mGLLibrary = nullptr;
   bool mIsANGLE = false;
+  bool mIsD3DANGLE = false;
   std::bitset<UnderlyingValue(EGLLibExtension::Max)> mAvailableExtensions;
   std::weak_ptr<EglDisplay> mDefaultDisplay;
   std::unordered_map<EGLDisplay, std::weak_ptr<EglDisplay>> mActiveDisplays;
@@ -176,6 +179,8 @@ class GLLibraryEGL final {
   std::shared_ptr<EglDisplay> CreateDisplay(const EGLCreateDisplayFlags& aFlags,
                                             nsACString* const out_failureId);
   std::shared_ptr<EglDisplay> CreateDisplay(ID3D11Device*);
+  std::shared_ptr<EglDisplay> CreateDisplayForMetalDevice(
+      uint64_t aMetalDeviceRegistryID);
   std::shared_ptr<EglDisplay> DefaultDisplay(nsACString* const out_failureId);
 
   bool IsExtensionSupported(EGLLibExtension aKnownExtension) const {
@@ -187,6 +192,7 @@ class GLLibraryEGL final {
   }
 
   bool IsANGLE() const { return mIsANGLE; }
+  bool IsD3DANGLE() const { return mIsD3DANGLE; }
 
   // -
   // PFN wrappers

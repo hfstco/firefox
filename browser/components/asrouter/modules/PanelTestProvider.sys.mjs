@@ -21,6 +21,74 @@ const isMSIX =
 const MESSAGES = () => [
   {
     weight: 100,
+    id: "FEATURE_CALLOUT_REFERRAL_TEST",
+    template: "feature_callout",
+    description: "Test referral code generation from a message",
+    content: {
+      id: "FEATURE_CALLOUT_REFERRAL_TEST",
+      template: "multistage",
+      backdrop: "transparent",
+      transitions: false,
+      disableHistoryUpdates: true,
+      metrics: "block",
+      screens: [
+        {
+          id: "FEATURE_CALLOUT_REFERRAL_TEST",
+          anchors: [
+            {
+              selector: "#PanelUI-menu-button",
+              panel_position: {
+                anchor_attachment: "bottomcenter",
+                callout_attachment: "topright",
+              },
+            },
+          ],
+          content: {
+            position: "callout",
+            title: {
+              raw: "This callout will link to about:referrals",
+              marginInline: "0 42px",
+            },
+            above_button_content: [
+              {
+                type: "text",
+                text: [
+                  "Click ",
+                  {
+                    raw: "here",
+                    link_key: "here",
+                  },
+                  " to generate a referral code.",
+                ],
+                textAlign: "start",
+                fontSize: "0.8125em",
+                marginBlock: "0",
+              },
+            ],
+            here: {
+              action: {
+                type: "GET_REFERRAL_CODE",
+                data: {
+                  entrypoint: "test",
+                  where: "tab",
+                },
+              },
+            },
+            dismiss_button: {
+              action: {
+                dismiss: true,
+              },
+            },
+          },
+        },
+      ],
+    },
+    targeting: "providerCohorts.panel_local_testing == 'SHOW_TEST'",
+    groups: [],
+    provider: "panel_local_testing",
+  },
+  {
+    weight: 100,
     id: "FEATURE_CALLOUT_EMBEDDED_LINKS_TEST",
     template: "feature_callout",
     description: "Test embedded links in above_button_content paragraphs",
@@ -1994,85 +2062,6 @@ const MESSAGES = () => [
       ],
     },
     frequency: { lifetime: 3 },
-    trigger: { id: "defaultBrowserCheck" },
-  },
-  {
-    id: "PB_FOCUS_PROMO",
-    groups: ["panel-test-provider"],
-    template: "spotlight",
-    content: {
-      template: "multistage",
-      backdrop: "transparent",
-      screens: [
-        {
-          id: "PBM_FIREFOX_FOCUS",
-          order: 0,
-          content: {
-            logo: {
-              imageURL: "chrome://browser/content/assets/focus-logo.svg",
-              height: "48px",
-            },
-            title: {
-              string_id: "spotlight-focus-promo-title",
-            },
-            subtitle: {
-              string_id: "spotlight-focus-promo-subtitle",
-            },
-            dismiss_button: {
-              action: {
-                dismiss: true,
-              },
-            },
-            ios: {
-              action: {
-                data: {
-                  args: "https://app.adjust.com/167k4ih?campaign=firefox-desktop&adgroup=pb&creative=focus-omc172&redirect=https%3A%2F%2Fapps.apple.com%2Fus%2Fapp%2Ffirefox-focus-privacy-browser%2Fid1055677337",
-                  where: "tabshifted",
-                },
-                type: "OPEN_URL",
-                navigate: true,
-              },
-            },
-            android: {
-              action: {
-                data: {
-                  args: "https://app.adjust.com/167k4ih?campaign=firefox-desktop&adgroup=pb&creative=focus-omc172&redirect=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3Dorg.mozilla.focus",
-                  where: "tabshifted",
-                },
-                type: "OPEN_URL",
-                navigate: true,
-              },
-            },
-            email_link: {
-              action: {
-                data: {
-                  args: "https://mozilla.org",
-                  where: "tabshifted",
-                },
-                type: "OPEN_URL",
-                navigate: true,
-              },
-            },
-            tiles: {
-              type: "mobile_downloads",
-              data: {
-                QR_code: {
-                  image_url:
-                    "chrome://browser/content/assets/focus-qr-code.svg",
-                  alt_text: {
-                    string_id: "spotlight-focus-promo-qr-code",
-                  },
-                },
-                email: {
-                  link_text: "Email yourself a link",
-                },
-                marketplace_buttons: ["ios", "android"],
-              },
-            },
-          },
-        },
-      ],
-    },
     trigger: { id: "defaultBrowserCheck" },
   },
   {

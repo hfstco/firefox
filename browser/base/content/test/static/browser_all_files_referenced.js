@@ -38,8 +38,6 @@ var gExceptionPaths = [
   "chrome://activity-stream/content/data/content/assets/euo-chatbot.svg",
   "chrome://browser/content/assets/moz-vpn.svg",
   "chrome://browser/content/assets/vpn-logo.svg",
-  "chrome://browser/content/assets/focus-promo.png",
-  "chrome://browser/content/assets/klar-qr-code.svg",
   "chrome://browser/content/asrouter/assets/fox-with-box-on-cloud.svg",
   "chrome://browser/content/asrouter/assets/fox-with-devices.svg",
   "chrome://browser/content/asrouter/assets/fox-with-locked-box.svg",
@@ -137,6 +135,11 @@ var gExceptionPaths = [
   // Remote Settings.
   "chrome://browser/skin/illustrations/yelpRealtime-opt-in.svg",
 ];
+
+if (AppConstants.platform == "win") {
+  // Referenced via resource://gfxsanity/
+  gExceptionPaths.push("resource://gre-resources/gfxsanity/");
+}
 
 // These are not part of the omni.ja file, so we find them only when running
 // the test on a non-packaged build.
@@ -995,8 +998,9 @@ add_task(async function checkAllTheFiles() {
     "chrome://devtools",
     "moz-src:///devtools/",
     "resource://devtools/",
-    "resource://devtools-shared-images/",
     "resource://devtools-highlighter-styles/",
+    "resource://devtools-shared-images/",
+    "resource://devtools-webextension-fallback/",
     "resource://app/modules/devtools",
     "resource://gre/modules/devtools",
     "resource://app/localization/en-US/startup/aboutDevTools.ftl",

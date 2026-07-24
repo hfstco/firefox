@@ -183,7 +183,7 @@ class BidiReceiveStream : public nsIWebTransportStreamCallback {
           void(uint64_t, WebTransportParent::OnResetOrStopSendingCallback&&,
                nsIWebTransportBidirectionalStream* aStream)>&& aStreamCallback,
       Maybe<int64_t> aSendOrder, nsCOMPtr<nsISerialEventTarget>& aSocketThread)
-      : mResolver(aResolver),
+      : mResolver(std::move(aResolver)),
         mStreamCallback(std::move(aStreamCallback)),
         mSendOrder(aSendOrder),
         mSocketThread(aSocketThread) {}
@@ -210,7 +210,7 @@ class UniReceiveStream : public nsIWebTransportStreamCallback {
                          WebTransportParent::OnResetOrStopSendingCallback&&,
                          nsIWebTransportSendStream* aStream)>&& aStreamCallback,
       Maybe<int64_t> aSendOrder, nsCOMPtr<nsISerialEventTarget>& aSocketThread)
-      : mResolver(aResolver),
+      : mResolver(std::move(aResolver)),
         mStreamCallback(std::move(aStreamCallback)),
         mSendOrder(aSendOrder),
         mSocketThread(aSocketThread) {}
@@ -405,6 +405,39 @@ IPCResult WebTransportParent::RecvSetSendOrder(uint64_t aStreamId,
   } else if (auto entry = mBidiStreamCallbackMap.Lookup(aStreamId)) {
     entry->mStream->SetSendOrder(aSendOrder);
   }
+  return IPC_OK();
+}
+
+IPCResult WebTransportParent::RecvExportKeyingMaterial(
+    nsTArray<uint8_t>&& aLabel, Maybe<nsTArray<uint8_t>>&& aContext,
+    ExportKeyingMaterialResolver&& aResolver) {
+  LOG(("ExportKeyingMaterial for %p, label length=%zu, has context=%d", this,
+       aLabel.Length(), aContext.isSome()));
+
+  if (!mWebTransport) {
+    aResolver(nsTArray<uint8_t>());
+    return IPC_OK();
+  }
+
+  nsTArray<uint8_t> context;
+  if (aContext.isSome()) {
+    context = std::move(aContext.ref());
+  }
+
+  nsTArray<uint8_t> keyingMaterial;
+  nsresult rv =
+      mWebTransport->ExportKeyingMaterial(aLabel, context, keyingMaterial);
+
+  if (NS_FAILED(rv)) {
+    LOG(("ExportKeyingMaterial failed with rv=0x%08x",
+         static_cast<uint32_t>(rv)));
+    aResolver(nsTArray<uint8_t>());
+    return IPC_OK();
+  }
+
+  LOG(("ExportKeyingMaterial succeeded, returning %zu bytes",
+       keyingMaterial.Length()));
+  aResolver(std::move(keyingMaterial));
   return IPC_OK();
 }
 

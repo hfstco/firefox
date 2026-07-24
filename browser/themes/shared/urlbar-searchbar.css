@@ -93,7 +93,6 @@
   --urlbar-input-container-outline-offset-breakout: calc(-1 * var(--urlbar-input-container-border-width-breakout));
   --urlbar-margin-block-start-breakout: calc((var(--urlbar-container-height) - var(--urlbar-height)) / 2);
   --urlbar-searchmode-switcher-panel-list-min-width: 17em;
-  --urlbar-selection-border-radius: var(--border-radius-xsmall);
 
   @media not -moz-pref("browser.nova.enabled") {
     --urlbar-background-border: var(--urlbar-input-container-border-width) solid var(--toolbar-field-border-color);
@@ -113,7 +112,6 @@
     --urlbar-input-container-outline-offset-breakout: 0px;
     --urlbar-margin-block-start-breakout: 0px;
     --urlbar-searchmode-switcher-panel-list-min-width: auto;
-    --urlbar-selection-border-radius: 0;
   }
 }
 
@@ -353,12 +351,6 @@ toolbar[inactive="true"] .urlbar,
   outline: none;
 }
 
-.searchbar-textbox::selection,
-.urlbar-input::selection {
-  /* urlbar and searchbar */
-  border-radius: var(--urlbar-selection-border-radius);
-}
-
 #urlbar-input {
   mask-repeat: no-repeat;
   unicode-bidi: plaintext;
@@ -430,11 +422,6 @@ toolbar[inactive="true"] .urlbar,
       height: auto;
     }
   }
-}
-
-.urlbar-input::placeholder,
-.searchbar-textbox::placeholder {
-  opacity: 0.69;
 }
 
 #TabsToolbar #searchbar:not(:focus-within) {

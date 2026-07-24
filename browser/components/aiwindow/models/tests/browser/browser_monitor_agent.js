@@ -625,6 +625,26 @@ add_task(async function test_monitor_limits_watch_urls() {
   }
 });
 
+add_task(async function test_createMonitor_returns_id() {
+  try {
+    await resetMonitorAgentForTesting();
+    const id = await MonitorAgent.createMonitor({
+      prompt: "Check if any product price is below $300.",
+      watchUrls: ["https://example.com/product"],
+      schedule: { type: "interval", hours: 1 },
+    });
+    Assert.equal(typeof id, "string", "createMonitor resolves to a string id");
+    const monitors = await MonitorAgent.listMonitors();
+    Assert.equal(
+      monitors.at(-1).id,
+      id,
+      "returned id matches the created monitor"
+    );
+  } finally {
+    await resetMonitorAgentForTesting();
+  }
+});
+
 add_task(async function test_limit_number_of_monitors() {
   try {
     // create more monitors than the allowed number
@@ -721,5 +741,87 @@ add_task(async function test_monitor_only_watches_http_urls() {
     await stopServing();
     mockEngineManager.cleanupMocks();
     await MonitorAgent._resetForTesting();
+  }
+});
+
+add_task(async function test_pauseMonitor() {
+  try {
+    await resetMonitorAgentForTesting();
+
+    // Create a monitor that starts enabled by default
+    const id = await MonitorAgent.createMonitor({
+      prompt: "Check if the product price is below $300.",
+      watchUrls: ["https://example.com/product"],
+      schedule: { type: "interval", hours: 1 },
+    });
+
+    let monitors = await MonitorAgent.listMonitors();
+    Assert.equal(
+      monitors[0].enabled,
+      true,
+      "Monitor starts enabled by default"
+    );
+
+    // Test pausing the monitor (pause=true should set enabled=false)
+    await MonitorAgent.pauseMonitor(id, true);
+    monitors = await MonitorAgent.listMonitors();
+    Assert.equal(
+      monitors[0].enabled,
+      false,
+      "Monitor is paused when pause=true"
+    );
+
+    // Test resuming the monitor (pause=false should set enabled=true)
+    await MonitorAgent.pauseMonitor(id, false);
+    monitors = await MonitorAgent.listMonitors();
+    Assert.equal(
+      monitors[0].enabled,
+      true,
+      "Monitor is resumed when pause=false"
+    );
+
+    // Test toggling without explicit pause parameter
+    await MonitorAgent.pauseMonitor(id);
+    monitors = await MonitorAgent.listMonitors();
+    Assert.equal(
+      monitors[0].enabled,
+      false,
+      "Monitor toggles to paused when no pause parameter"
+    );
+
+    await MonitorAgent.pauseMonitor(id);
+    monitors = await MonitorAgent.listMonitors();
+    Assert.equal(
+      monitors[0].enabled,
+      true,
+      "Monitor toggles back to enabled when no pause parameter"
+    );
+
+    // Test that pausing with the same state doesn't break
+    await MonitorAgent.pauseMonitor(id, false);
+    monitors = await MonitorAgent.listMonitors();
+    Assert.equal(
+      monitors[0].enabled,
+      true,
+      "Setting enabled when already enabled works"
+    );
+
+    await MonitorAgent.pauseMonitor(id, true);
+    await MonitorAgent.pauseMonitor(id, true);
+    monitors = await MonitorAgent.listMonitors();
+    Assert.equal(
+      monitors[0].enabled,
+      false,
+      "Setting paused when already paused works"
+    );
+
+    // Test error handling for non-existent monitor
+    await Assert.rejects(
+      MonitorAgent.pauseMonitor("non-existent-id", true),
+      /Monitor with id non-existent-id not found/,
+      "pauseMonitor rejects with error for non-existent monitor"
+    );
+  } finally {
+    await resetMonitorAgentForTesting();
   }
 });

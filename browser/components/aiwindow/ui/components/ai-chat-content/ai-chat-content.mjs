@@ -11,6 +11,8 @@ import "chrome://browser/content/aiwindow/components/chat-assistant-error.mjs";
 // eslint-disable-next-line import/no-unassigned-import
 import "chrome://browser/content/aiwindow/components/chat-assistant-loader.mjs";
 // eslint-disable-next-line import/no-unassigned-import
+import "chrome://browser/content/aiwindow/components/chat-assistant-citations.mjs";
+// eslint-disable-next-line import/no-unassigned-import
 import "chrome://browser/content/aiwindow/components/website-chip-container.mjs";
 // eslint-disable-next-line import/no-unassigned-import
 import "chrome://browser/content/aiwindow/components/ai-website-confirmation.mjs";
@@ -18,6 +20,8 @@ import "chrome://browser/content/aiwindow/components/ai-website-confirmation.mjs
 import "chrome://browser/content/aiwindow/components/kit-mention.mjs";
 // eslint-disable-next-line import/no-unassigned-import
 import "chrome://browser/content/aiwindow/components/agent-monitor-item.mjs";
+// eslint-disable-next-line import/no-unassigned-import
+import "chrome://global/content/elements/moz-textarea.mjs";
 
 const FOLLOW_UP_QTY = 2;
 /**
@@ -30,6 +34,7 @@ const UI_TYPES = {
   CANCELLED_COMPONENT: "cancelled-component",
   ACTION_LOG: "action-log",
   RETRY_COMPONENT: "retry-component",
+  AGENT_MONITOR: "agent-monitor-item",
 };
 /**
  * UI update types for communicating user interactions with tool UIs back to the actor.
@@ -41,6 +46,12 @@ const UI_UPDATE_TYPES = {
   UNDO_TAB_CLOSE: "undo-tab-close",
   UNDO_TAB_GROUP: "undo-tab-group",
   RETRY_PROMPT: "retry-prompt",
+  CREATE_MONITOR: "create-monitor",
+  CANCEL_MONITOR: "cancel-monitor",
+  UPDATE_MONITOR: "update-monitor",
+  DELETE_MONITOR: "delete-monitor",
+  PAUSE_MONITOR: "pause-monitor",
+  CHECK_MONITOR: "check-monitor",
 };
 
 const CONFIRMATION_UI_TYPES = [
@@ -108,6 +119,7 @@ export class AIChatContent extends MozLitElement {
       [UI_TYPES.AI_ACTION_RESULT]: msg => this.#renderActionResult(msg),
       [UI_TYPES.CANCELLED_COMPONENT]: () => this.#renderCancelledComponent(),
       [UI_TYPES.RETRY_COMPONENT]: msg => this.#renderRetryComponent(msg),
+      [UI_TYPES.AGENT_MONITOR]: msg => this.#renderAgentMonitorComponent(msg),
     };
 
     /**
@@ -1059,7 +1071,9 @@ export class AIChatContent extends MozLitElement {
       <ai-action-result
         .labelL10nId=${summary?.l10nId}
         .labelL10nArgs=${summary?.l10nArgs}
+        .labelLink=${summary?.link ?? null}
         .rows=${this.#buildGroupedActionLogRows(toolMsgs)}
+        .isLoading=${!isComplete}
         .isExpanded=${this.#actionResultExpandState.get(key) ?? false}
         @action-result-toggle=${e =>
           this.#actionResultExpandState.set(key, !!e.detail?.isExpanded)}
@@ -1111,6 +1125,73 @@ export class AIChatContent extends MozLitElement {
       updateData: event.detail,
     });
   };
+
+  #handleMonitorSubmit = (event, messageId, toolCallId) => {
+    // The display card reuses submit for edits; create only happens from the
+    // "create" card.
+    const isEdit = event.detail?.mode === "display";
+    this.#dispatchToolUIUpdate({
+      messageId,
+      toolCallId,
+      updateType: isEdit
+        ? UI_UPDATE_TYPES.UPDATE_MONITOR
+        : UI_UPDATE_TYPES.CREATE_MONITOR,
+      updateData: event.detail,
+    });
+  };
+
+  #handleMonitorCancel = (event, messageId, toolCallId) => {
+    /* TODO: Bug 2055336 - Add cancel monitor view */
+    this.#dispatchToolUIUpdate({
+      messageId,
+      toolCallId,
+      updateType: UI_UPDATE_TYPES.CANCEL_MONITOR,
+      updateData: event.detail,
+    });
+  };
+
+  #handleMonitorAction = (event, messageId, toolCallId, updateType) => {
+    this.#dispatchToolUIUpdate({
+      messageId,
+      toolCallId,
+      updateType,
+      updateData: event.detail,
+    });
+  };
+
+  #renderAgentMonitorComponent(msg) {
+    const { messageId, toolUIData } = msg;
+    const toolCallId = toolUIData.toolCallId;
+    return html`<agent-monitor-item
+      mode=${toolUIData.properties?.mode ?? "create"}
+      .agent=${toolUIData.properties?.agent}
+      @agent-monitor-item:submit=${event =>
+        this.#handleMonitorSubmit(event, messageId, toolCallId)}
+      @agent-monitor-item:cancel=${event =>
+        this.#handleMonitorCancel(event, messageId, toolCallId)}
+      @agent-monitor-item:delete=${event =>
+        this.#handleMonitorAction(
+          event,
+          messageId,
+          toolCallId,
+          UI_UPDATE_TYPES.DELETE_MONITOR
+        )}
+      @agent-monitor-item:pause=${event =>
+        this.#handleMonitorAction(
+          event,
+          messageId,
+          toolCallId,
+          UI_UPDATE_TYPES.PAUSE_MONITOR
+        )}
+      @agent-monitor-item:check-now=${event =>
+        this.#handleMonitorAction(
+          event,
+          messageId,
+          toolCallId,
+          UI_UPDATE_TYPES.CHECK_MONITOR
+        )}
+    ></agent-monitor-item>`;
+  }
 
   #handleCreateTabGroupSubmit = (event, messageId, toolCallId) => {
     this.#dispatchToolUIUpdate({
@@ -1193,7 +1274,8 @@ export class AIChatContent extends MozLitElement {
       wasRestored
     );
 
-    let canUndo = !wasRestored && !!confirmedData.operationId;
+    const undoOperationIds = confirmedData.operationIds ?? [];
+    let canUndo = !wasRestored && !!undoOperationIds.length;
     // Override can undo if explicitly dismissed
     if (toolUIData.properties?.undoDismissed) {
       canUndo = false;
@@ -1209,7 +1291,7 @@ export class AIChatContent extends MozLitElement {
               toolCallId: toolUIData.toolCallId,
               updateType: undoUpdateType,
               updateData: {
-                operationId: confirmedData.operationId,
+                operationIds: undoOperationIds,
                 selectedTabs: confirmedData.selectedTabs || [],
                 actionTimestamp: confirmedData.actionTimestamp,
               },
@@ -1338,8 +1420,12 @@ export class AIChatContent extends MozLitElement {
     ></smartwindow-prompts>`;
   }
 
-  #renderLoader() {
-    if (!this.assistantIsLoading) {
+  #renderLoader(suppress) {
+    // The spinner is suppressed while an action log is processing (its animated
+    // label already communicates progress) and once the reply is streaming (its
+    // text is already visible). It only shows while waiting with nothing else on
+    // screen yet.
+    if (!this.assistantIsLoading || suppress) {
       return nothing;
     }
     return html`<chat-assistant-loader
@@ -1446,9 +1532,12 @@ export class AIChatContent extends MozLitElement {
       });
     }
 
-    // Commit anything still pending at end of loop. The in-flight turn is
-    // complete once assistantIsLoading set false
-    appendPendingAssistantTurn(!this.assistantIsLoading);
+    // Commit anything still pending at end of loop. The action log is finished
+    // once the turn's reply starts streaming (its tools are done by then) or the
+    // whole turn completes, so it doesn't keep shimmering through response
+    // generation.
+    const replyStarted = !!pendingAssistantMessage?.body;
+    appendPendingAssistantTurn(!this.assistantIsLoading || replyStarted);
 
     return items;
   }
@@ -1463,8 +1552,8 @@ export class AIChatContent extends MozLitElement {
     return toolMsgs.map(msg => msg.row).filter(Boolean);
   }
 
-  #renderMessages() {
-    return this.#buildTurnRenderItems().map((item, i) => {
+  #renderMessages(items) {
+    return items.map((item, i) => {
       const { type, msgs, msg, isComplete, contextPageUrl } = item;
       if (type === "action-log") {
         return this.#renderActionLogGroup(msgs, isComplete, i);
@@ -1476,6 +1565,18 @@ export class AIChatContent extends MozLitElement {
   }
 
   render() {
+    const renderItems = this.#buildTurnRenderItems();
+    const actionLogInProgress = renderItems.some(
+      item => item.type === "action-log" && item.isComplete === false
+    );
+    // Once the reply is streaming, its text is already visible, so the spinner
+    // isn't needed (and shouldn't reappear now that the action log completes as
+    // soon as the reply starts).
+    const lastItem = renderItems.at(-1);
+    const replyStreaming =
+      lastItem?.type === "message" &&
+      lastItem.msg?.role === "assistant" &&
+      !!lastItem.msg?.body;
     return html`
       <link
         rel="stylesheet"
@@ -1483,8 +1584,10 @@ export class AIChatContent extends MozLitElement {
       />
       <div class="chat-content-wrapper" tabindex="-1">
         <div class="chat-inner-wrapper">
-          ${this.#renderMessages()} ${this.#renderFollowUpSuggestions()}
-          ${this.#renderLoader()} ${this.#renderError()}
+          ${this.#renderMessages(renderItems)}
+          ${this.#renderFollowUpSuggestions()}
+          ${this.#renderLoader(actionLogInProgress || replyStreaming)}
+          ${this.#renderError()}
         </div>
       </div>
       <kit-mention variant="sidebar"></kit-mention>

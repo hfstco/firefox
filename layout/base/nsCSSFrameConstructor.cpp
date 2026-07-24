@@ -1594,8 +1594,7 @@ void nsCSSFrameConstructor::CreateGeneratedContent(
         if (!FindInReadable(accesskey, start, end)) {
           start = originalStart;
           // didn't find it - perform a case-insensitive search
-          found = FindInReadable(accesskey, start, end,
-                                 nsCaseInsensitiveStringComparator);
+          found = CaseInsensitiveFindInReadable(accesskey, start, end);
         }
         if (!found) {
           return Nothing();
@@ -6716,6 +6715,10 @@ static bool CanRemoveWrapperPseudoForChildRemoval(nsIFrame* aFrame,
   if (!IsOnlyMeaningfulChildOfWrapperPseudo(aFrame, aParent)) {
     return false;
   }
+  if (aParent->GetPrevContinuation() || aParent->GetNextContinuation()) {
+    // If our parent is fragmented we're not really the only meaningful child.
+    return false;
+  }
   if (aParent->IsRubyBaseContainerFrame()) {
     // We can't remove the first ruby base container of a ruby frame unless
     // it has no siblings. See CreateNeededPseudoSiblings.
@@ -10064,7 +10067,8 @@ void nsCSSFrameConstructor::ConstructBlock(
 
   // Create column hierarchy if necessary.
   const bool needsColumn =
-      aComputedStyle->StyleColumn()->IsColumnContainerStyle();
+      aComputedStyle->StyleColumn()->IsColumnContainerStyle() &&
+      !aParentFrame->IsTextInputFrame();
   if (needsColumn) {
     *aNewFrame = BeginBuildingColumns(aState, aContent, aParentFrame,
                                       blockFrame, aComputedStyle);

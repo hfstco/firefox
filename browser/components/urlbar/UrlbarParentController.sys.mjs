@@ -7,14 +7,23 @@ import { AppConstants } from "resource://gre/modules/AppConstants.sys.mjs";
 /**
  * @import {BrowserSearchTelemetry} from "moz-src:///browser/components/search/BrowserSearchTelemetry.sys.mjs"
  * @import {ProvidersManager} from "moz-src:///browser/components/urlbar/UrlbarProvidersManager.sys.mjs"
+ * @import {SearchEngine} from "moz-src:///toolkit/components/search/SearchEngine.sys.mjs"
  * @import {SapLocation, SmartbarInput} from "moz-src:///browser/components/urlbar/content/SmartbarInput.mjs"
  * @import {UrlbarView} from "chrome://browser/content/urlbar/UrlbarView.mjs"
  * @import {WindowMode} from "moz-src:///browser/components/urlbar/content/UrlbarInput.mjs"
+ * @import {SearchEngineInfo} from "chrome://browser/content/urlbar/SearchEngineStore.mjs"
  */
 
 const lazy = {};
 
 ChromeUtils.defineESModuleGetters(lazy, {
+  AppProvidedConfigEngine:
+    "moz-src:///toolkit/components/search/ConfigSearchEngine.sys.mjs",
+  ASRouter: "resource:///modules/asrouter/ASRouter.sys.mjs",
+  ConfigSearchEngine:
+    "moz-src:///toolkit/components/search/ConfigSearchEngine.sys.mjs",
+  BrowserSearchTelemetry:
+    "moz-src:///browser/components/search/BrowserSearchTelemetry.sys.mjs",
   ExtensionUtils: "resource://gre/modules/ExtensionUtils.sys.mjs",
   Interactions: "moz-src:///browser/components/places/Interactions.sys.mjs",
   ProvidersManager:
@@ -34,6 +43,27 @@ ChromeUtils.defineLazyGetter(lazy, "logger", () =>
 );
 
 /**
+ * Serializes a search engine into a plain SearchEngineInfo object.
+ *
+ * @param {SearchEngine} engine
+ *   The engine to serialize.
+ * @returns {SearchEngineInfo}
+ *   The serializable engine data.
+ */
+function engineToEngineInfo(engine) {
+  return {
+    name: engine.name,
+    id: engine.id,
+    isGeneralPurposeEngine: engine.isGeneralPurposeEngine,
+    isConfigEngine: engine instanceof lazy.ConfigSearchEngine,
+    isAppProvided: engine instanceof lazy.AppProvidedConfigEngine,
+    isNewUntil: engine.isNew() ? engine.isNewUntil : "",
+    hideOneOffButton: engine.hideOneOffButton,
+    aliases: [...engine.aliases],
+  };
+}
+
+/**
  * The address bar controller handles queries from the address bar, obtains
  * results and returns them to the UI for display.
  *
@@ -50,7 +80,7 @@ ChromeUtils.defineLazyGetter(lazy, "logger", () =>
  * - onQueryResults(queryContext)
  * - onQueryCancelled(queryContext)
  * - onQueryFinished(queryContext)
- * - onQueryResultRemoved(index)
+ * - onQueryResultRemoved(resultId)
  * - onViewOpen()
  * - onViewClose()
  */
@@ -66,6 +96,9 @@ export class UrlbarParentController {
   // parent-process object, so we don't reach through the content-side child
   // for it.
   #actor = null;
+
+  // Whether the controller serves the address bar.
+  #isAddressbar = false;
 
   /**
    * Initialises the controller from standalone data; the live input/view are
@@ -90,6 +123,7 @@ export class UrlbarParentController {
     }
 
     this.sapName = sapName;
+    this.#isAddressbar = sapName == "urlbar";
     this.isPrivate = isPrivate;
     this.#actor = actor;
 
@@ -295,6 +329,97 @@ export class UrlbarParentController {
   }
 
   /**
+   * Records entry into a search mode. The parent-side counterpart to the
+   * content-side `BrowserSearchTelemetry.recordSearchMode()` call.
+   *
+   * @param {object} searchMode
+   *   The search mode being entered. See `UrlbarInput.setSearchMode`.
+   */
+  recordSearchMode(searchMode) {
+    try {
+      lazy.BrowserSearchTelemetry.recordSearchMode(searchMode);
+    } catch (ex) {
+      console.error(ex);
+    }
+  }
+
+  /**
+   * Records a visit to an engine's search form. The parent-side counterpart to
+   * the content-side `BrowserSearchTelemetry.recordSearchForm()` call; the
+   * engine is shipped by id and resolved here, and the source is this
+   * controller's SAP.
+   *
+   * @param {string} engineId
+   *   The id of the engine whose search form was visited.
+   */
+  recordSearchForm(engineId) {
+    let engine = lazy.SearchService.getEngineById(engineId);
+    lazy.BrowserSearchTelemetry.recordSearchForm(engine, this.sapName);
+  }
+
+  /**
+   * Records that a search is being loaded: bumps the search-count prefs,
+   * informs ASRouter, and records search telemetry. The parent-side
+   * counterpart to the content-side `_recordSearch()`.
+   *
+   * @param {object} options
+   * @param {string} options.engineId
+   *   The id of the engine handling the search.
+   * @param {string} options.searchSource
+   *   Where the search originated from.
+   * @param {object} options.details
+   *   The search action details, per `BrowserSearchTelemetry.recordSearch()`.
+   * @param {number} [options.browserId]
+   *   The id of the browser where the search is being opened; defaults to the
+   *   selected browser.
+   */
+  recordSearch({ engineId, searchSource, details, browserId }) {
+    let browser =
+      (browserId &&
+        BrowsingContext.getCurrentTopByBrowserId(browserId)?.embedderElement) ||
+      this.browserWindow.gBrowser.selectedBrowser;
+
+    // Record when the user uses the search bar to be used for message
+    // targeting. This is arbitrarily capped at 100, only to prevent the number
+    // from growing infinitely.
+    const totalSearches = Services.prefs.getIntPref(
+      "browser.search.totalSearches"
+    );
+    if (totalSearches < 100) {
+      Services.prefs.setIntPref(
+        "browser.search.totalSearches",
+        totalSearches + 1
+      );
+    }
+
+    // Record when the user uses the search bar so SearchWidgetTracker can
+    // remove the search bar when it hasn't been used in a long time.
+    if (this.sapName == "searchbar") {
+      Services.prefs.setStringPref(
+        "browser.search.widget.lastUsed",
+        new Date().toISOString()
+      );
+    }
+
+    lazy.ASRouter.sendTriggerMessage({
+      browser,
+      id: "onSearch",
+      context: {
+        isSuggestion: details.isSuggestion || false,
+        searchSource,
+        isOneOff: details.isOneOff,
+      },
+    });
+
+    lazy.BrowserSearchTelemetry.recordSearch(
+      browser,
+      engineId,
+      searchSource,
+      details
+    );
+  }
+
+  /**
    * Cancels an in-progress query. Note, queries may continue running if they
    * can't be cancelled.
    */
@@ -365,6 +490,51 @@ export class UrlbarParentController {
    */
   setChild(child) {
     this.#child = child;
+  }
+
+  /**
+   * Opens a search engine result page (SERP) for the specified
+   * search engine and search query.
+   *
+   * Does not record telemetry, so it should be recorded by the caller.
+   *
+   * @param {string} engineId
+   * @param {string} searchTerms
+   * @param {string} where
+   * @param {boolean} [inBackground]
+   */
+  openSERP(engineId, searchTerms, where, inBackground = false) {
+    let searchEngine = lazy.SearchService.getEngineById(engineId);
+
+    let [url, postData] = lazy.UrlbarUtils.getSearchQueryUrl(
+      searchEngine,
+      searchTerms
+    );
+
+    this.input.window.openTrustedLinkIn(url, where, {
+      inBackground,
+      postData,
+    });
+  }
+
+  /**
+   * Opens the homepage (also known as searchForm) of the
+   * specified search engine and records telemetry.
+   *
+   * @param {string} engineId
+   * @param {string} where
+   * @param {boolean} [inBackground]
+   */
+  openSearchForm(engineId, where, inBackground = false) {
+    let searchEngine = lazy.SearchService.getEngineById(engineId);
+    lazy.BrowserSearchTelemetry.recordSearchForm(
+      searchEngine,
+      this.input.sapName
+    );
+    let url = searchEngine.searchForm;
+    this.input.window.openTrustedLinkIn(url, where, {
+      inBackground,
+    });
   }
 
   /**
@@ -441,6 +611,157 @@ export class UrlbarParentController {
   }
 
   /**
+   * Loads a URL in the browser window resolved from the actor. The content
+   * child supplies the serializable load parameters; the parent fills in the
+   * ones that reference the chrome window (the target browser and initiating
+   * document) and reports back whether the load failed in a way that should
+   * revert the input.
+   *
+   * @param {object} loadData
+   * @param {string} loadData.url
+   *   The URL to load.
+   * @param {string} loadData.where
+   *   Where to open, per `openTrustedLinkIn`.
+   * @param {object} loadData.params
+   *   The serializable `openTrustedLinkIn` params.
+   * @param {number} [loadData.browserId]
+   *   The target browser's id; defaults to the selected browser.
+   * @param {string} [loadData.userTypedValue]
+   *   The value to record as the browser's typed value, for a `current` load.
+   * @returns {{reverted: boolean, browserId: number}}
+   *   Whether the load threw without showing an error page, so the input should
+   *   revert, and the id of the browser the load resolved to. The latter is not
+   *   an echo of the optional `browserId` param: a default `current` load omits
+   *   it and the target is resolved here, so this is how the child learns which
+   *   browser to hand `focusBrowser` on the deferred-Enter keyup -- a
+   *   content-process input can't resolve the selected browser itself.
+   */
+  loadURL({ url, where, params, browserId, userTypedValue }) {
+    let browser =
+      (browserId &&
+        BrowsingContext.getCurrentTopByBrowserId(browserId)?.embedderElement) ||
+      this.browserWindow.gBrowser.selectedBrowser;
+
+    if (this.#isAddressbar) {
+      this.#prepareAddressbarLoad({
+        browser,
+        url,
+        where,
+        params,
+        userTypedValue,
+      });
+    }
+
+    if (where == "current") {
+      params.targetBrowser = browser;
+    } else {
+      params.initiatingDoc = this.browserWindow.document;
+    }
+
+    // Focus the content area before triggering loads, since if the load
+    // occurs in a new tab, we want focus to be restored to the content area
+    // when the current tab is re-selected.
+    if (!params.avoidBrowserFocus) {
+      browser.focus();
+    }
+
+    try {
+      this.browserWindow.openTrustedLinkIn(url, where, params);
+    } catch (ex) {
+      // This load can throw in certain cases; unless an error page was shown,
+      // the input should revert to the loaded URL.
+      return {
+        reverted: ex.result != Cr.NS_ERROR_LOAD_SHOWED_ERRORPAGE,
+        browserId: browser.browserId,
+      };
+    }
+    return { reverted: false, browserId: browser.browserId };
+  }
+
+  /**
+   * Focuses the browser a deferred-Enter load targeted, once the load's keyup
+   * fires, but only if it is still the selected browser. Reaching the browser
+   * element and comparing it against the selection is parent-only work.
+   *
+   * @param {number} [browserId]
+   *   The browser the load resolved to, as returned by `loadURL`.
+   * @returns {{focused: boolean}}
+   *   Whether the browser was focused, so the child can keep the domain name
+   *   visible.
+   */
+  focusBrowser(browserId) {
+    let browser =
+      browserId &&
+      BrowsingContext.getCurrentTopByBrowserId(browserId)?.embedderElement;
+    let { selectedBrowser } = this.browserWindow.gBrowser;
+    if (browser && browser == selectedBrowser) {
+      selectedBrowser.focus();
+      return { focused: true };
+    }
+    return { focused: false };
+  }
+
+  /**
+   * Records the address bar bookkeeping on the target browser before the load,
+   * touching state that only exists on the chrome window.
+   *
+   * @param {object} loadData
+   * @param {object} loadData.browser
+   *   The target XUL browser.
+   * @param {string} loadData.url
+   *   The URL being loaded.
+   * @param {string} loadData.where
+   *   Where to open, per `openTrustedLinkIn`.
+   * @param {object} loadData.params
+   *   The `openTrustedLinkIn` params, extended here with `initiatedByURLBar`.
+   * @param {string} [loadData.userTypedValue]
+   *   The value to record as the browser's typed value, for a `current` load.
+   */
+  #prepareAddressbarLoad({ browser, url, where, params, userTypedValue }) {
+    if (where == "current") {
+      browser.userTypedValue = userTypedValue;
+    }
+
+    // No point in setting this if we are loading in a new window.
+    if (where != "window" && this.browserWindow.gInitialPages.includes(url)) {
+      browser.initialPageLoadedFromUserAction = url;
+    }
+
+    try {
+      lazy.UrlbarUtils.addToUrlbarHistory(url, this.browserWindow);
+    } catch (ex) {
+      // Things may go wrong when adding url to session history,
+      // but don't let that interfere with the loading of the url.
+      console.error(ex);
+    }
+
+    // TODO: When bug 1498553 is resolved, we should be able to
+    // remove the !triggeringPrincipal condition here.
+    if (
+      !params.triggeringPrincipal ||
+      params.triggeringPrincipal.isSystemPrincipal
+    ) {
+      // Reset DOS mitigations for the basic auth prompt.
+      delete browser.authPromptAbuseCounter;
+
+      // Reset temporary permissions on the current tab if the user reloads
+      // the tab via the urlbar.
+      if (
+        where == "current" &&
+        browser.currentURI &&
+        url === browser.currentURI.spec
+      ) {
+        this.browserWindow.SitePermissions.clearTemporaryBlockPermissions(
+          browser
+        );
+      }
+    }
+
+    // Specifies that the URL load was initiated by the URL bar.
+    params.initiatedByURLBar = true;
+  }
+
+  /**
    * Removes a result from the current query context and notifies listeners.
    * Heuristic results cannot be removed.
    *
@@ -465,15 +786,8 @@ export class UrlbarParentController {
     }
     let { queryContext } = this._lastQueryContextWrapper;
 
-    let index = queryContext.results.indexOf(result);
+    let index = queryContext.results.findIndex(r => r.id === result.id);
     if (index < 0) {
-      // On the actor message path `result` is reconstructed from the wire, so
-      // it isn't identity-equal to the context's instance; its row index, which
-      // matches the results order, locates it instead. Bug 2052875 will match by
-      // a stable result id so this doesn't rely on that ordering.
-      index = result.rowIndex ?? -1;
-    }
-    if (index < 0 || index >= queryContext.results.length) {
       console.error("Failed to find the selected result in the results");
       return;
     }
@@ -481,7 +795,7 @@ export class UrlbarParentController {
     queryContext.results.splice(index, 1);
     this.notify(
       lazy.UrlbarShared.NOTIFICATIONS.QUERY_RESULT_REMOVED,
-      index,
+      result.id,
       acknowledgeDismissalL10n
     );
   }
@@ -512,6 +826,104 @@ export class UrlbarParentController {
   notify(name, ...params) {
     this.#child.notify(name, ...params);
   }
+
+  #engineStoreInitStarted = false;
+
+  /**
+   * Initializes the engine store if the search service
+   * is already loaded and initialized.
+   *
+   * @returns {boolean}
+   *   Whether the search service was initialized successfully.
+   */
+  maybeInitEngineStore() {
+    if (
+      Cu.isESModuleLoaded(
+        "moz-src:///toolkit/components/search/SearchService.sys.mjs"
+      ) &&
+      lazy.SearchService.isInitialized
+    ) {
+      this.initEngineStore();
+      return true;
+    }
+    return false;
+  }
+
+  async initEngineStore() {
+    if (this.#engineStoreInitStarted) {
+      return;
+    }
+    this.#engineStoreInitStarted = true;
+    if (!lazy.SearchService.hasSuccessfullyInitialized) {
+      try {
+        await lazy.SearchService.init();
+      } catch {
+        this.#child.engineStore.receive("error");
+        return;
+      }
+    }
+    let engines = lazy.SearchService.visibleEngines;
+    let engineInfos = engines.map(engineToEngineInfo);
+    let defaultEngine = this.#child.engineStore.isPrivate
+      ? lazy.SearchService.defaultPrivateEngine
+      : lazy.SearchService.defaultEngine;
+    let defaultIndex = engines.findIndex(e => e == defaultEngine);
+    if (!defaultEngine || defaultIndex == -1) {
+      // Something went very wrong.
+      this.#child.engineStore.receive("error");
+      return;
+    }
+    this.#child.engineStore.receive("init", engineInfos, defaultIndex);
+    Services.obs.addObserver(this, "browser-search-engine-modified", true);
+  }
+
+  QueryInterface = ChromeUtils.generateQI([
+    "nsIObserver",
+    "nsISupportsWeakReference",
+  ]);
+
+  /**
+   * @param {{wrappedJSObject: SearchEngine}} subject
+   * @param {"browser-search-engine-modified"} _topic
+   * @param {string} data
+   */
+  observe = (subject, _topic, data) => {
+    let engine = subject.wrappedJSObject;
+    let sortedEngines = lazy.SearchService.visibleEngines;
+    let index = sortedEngines.findIndex(e => e == engine);
+    let engineInfo = engineToEngineInfo(engine);
+
+    switch (data) {
+      case "engine-icon-changed":
+        if (index == -1) {
+          // Engines that were already removed may still send notify updates.
+          // Ignore to avoid re-adding them.
+          break;
+        }
+      // fall-through
+      case "engine-added":
+      case "engine-changed":
+        if (!engine.hidden) {
+          this.#child.engineStore.receive("changed", engineInfo, index);
+        } else {
+          this.#child.engineStore.receive("removed", engineInfo, index);
+        }
+        break;
+      case "engine-removed":
+        this.#child.engineStore.receive("removed", engineInfo, index);
+        break;
+      case "engine-default":
+        if (!this.#child.engineStore.isPrivate) {
+          this.#child.engineStore.receive("default", engineInfo, index);
+        }
+        break;
+      case "engine-default-private":
+        if (this.#child.engineStore.isPrivate) {
+          this.#child.engineStore.receive("default", engineInfo, index);
+        }
+        break;
+    }
+  };
 }
 
 /**
@@ -759,6 +1171,7 @@ export class TelemetryEvent {
       searchSource: snapshot.internalDetails.searchSource,
       internalDetails: snapshot.internalDetails,
       exposures,
+      visibleResults: engagementData.visibleResults,
     });
   }
 
@@ -851,6 +1264,9 @@ export class TelemetryEvent {
    *   The interaction details (picked result reconstructed; event/element null).
    * @param {?object[]} data.exposures
    *   The resolved exposure list, or null when the session stays open.
+   * @param {?UrlbarResult[]} data.visibleResults
+   *   The results shown at engagement, for the provider impression/abandonment
+   *   hooks (the parent's own view has none on the message path).
    */
   recordFromChild({
     built,
@@ -859,6 +1275,7 @@ export class TelemetryEvent {
     searchSource,
     internalDetails,
     exposures,
+    visibleResults,
   }) {
     try {
       let { queryContext } = this._controller._lastQueryContextWrapper || {};
@@ -878,11 +1295,33 @@ export class TelemetryEvent {
         this.startTrackingDisableSuggest(disableBuilt, searchSource);
       }
 
+      // On the message path internalDetails.result was reconstructed from
+      // structured clone, which strips data that doesn't survive it (e.g. a Rust
+      // suggestion's UniFFI class) and yields an object distinct from the
+      // parent's authoritative result. Resolve it back to the live result by id
+      // so provider engagement handling -- notably dismissal against the Rust
+      // store -- operates on the live object, and carry the view-assigned
+      // rowIndex the wire preserves so the selection ping's position is right
+      // (the live result never went through a view). visibleResults stay as the
+      // wire results; the impression/abandonment hooks match them by id.
+      // TODO(bug 2055935): remove this or bake the resolution into the actor
+      // result deserialization.
+      let liveResult = queryContext?.results?.find(
+        r => r.id === internalDetails.result?.id
+      );
+      if (liveResult) {
+        if (internalDetails.result.rowIndex != null) {
+          liveResult.rowIndex = internalDetails.result.rowIndex;
+        }
+        internalDetails.result = liveResult;
+      }
+
       this._controller.manager.notifyEngagementChange(
         method,
         queryContext,
         internalDetails,
-        this._controller
+        this._controller,
+        visibleResults
       );
     } catch (ex) {
       console.error("Could not record engagement: ", ex);

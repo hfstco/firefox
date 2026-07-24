@@ -150,6 +150,27 @@ class UrlbarInputTestUtils {
   }
 
   /**
+   * Waits until an `UrlbarPrefs` preference holds the given value, checking the
+   * current value first and otherwise observing subsequent changes, then
+   * records an assertion. Handy for prefs a provider updates parent-side, which
+   * land asynchronously over the actor message path.
+   *
+   * @param {string} pref
+   *   The preference name, relative to the `browser.urlbar.` branch.
+   * @param {number|string|boolean} value
+   *   The value to wait for.
+   * @param {string} message
+   *   The message for the assertion recorded once the value is reached.
+   */
+  async waitForPrefValue(pref, value, message) {
+    await lazy.TestUtils.waitForCondition(
+      () => lazy.UrlbarPrefs.get(pref) === value,
+      `Waiting for pref "${pref}" to become ${JSON.stringify(value)}`
+    );
+    this.Assert?.equal(lazy.UrlbarPrefs.get(pref), value, message);
+  }
+
+  /**
    * Starts a search for a given string and waits for the search to be complete.
    *
    * @param {object} options The options object.
@@ -724,6 +745,29 @@ class UrlbarInputTestUtils {
   }
 
   /**
+   * Returns a promise resolved when the picked result's provider has handled the
+   * engagement (its `onEngagement` hook ran). Set it up before triggering the
+   * engagement, since the notification can land as soon as the pick is processed
+   * (and a round-trip later on the actor message path). Lets a test await a
+   * provider's parent-side engagement side effect.
+   *
+   * @param {ChromeWindow} win The window containing the urlbar.
+   * @returns {Promise} Resolved when a provider's `onEngagement` has run.
+   */
+  promiseProviderEngagement(win) {
+    let { controller } = this.#urlbar(win);
+    let { promise, resolve } = Promise.withResolvers();
+    let listener = {
+      onProviderEngagement() {
+        controller.removeListener(listener);
+        resolve();
+      },
+    };
+    controller.addListener(listener);
+    return promise;
+  }
+
+  /**
    * Gets the number of results.
    * You must wait for the query to be complete before using this.
    *
@@ -959,6 +1003,46 @@ class UrlbarInputTestUtils {
   }
 
   /**
+   * Asserts that the result and element carried by an `onEngagement` details
+   * match what the view presented. `onEngagement` runs parent-side, so on the
+   * message path the details are wire-reconstructed: `element` is dropped (a
+   * DOM node can't cross the actor boundary) and `result` is a wire copy
+   * resolved back to the live result by its stable `id`, not the view row's
+   * result object. So the result is compared by `id`, and the element is
+   * expected to be null on the message path.
+   *
+   * @param {UrlbarResult} pickedResult
+   *   The result carried by the engagement details.
+   * @param {Element} pickedElement
+   *   The element carried by the engagement details.
+   * @param {UrlbarResult} expectedResult
+   *   The result the view presented.
+   * @param {Element} expectedElement
+   *   The element the view presented.
+   */
+  assertPickedResult(
+    pickedResult,
+    pickedElement,
+    expectedResult,
+    expectedElement
+  ) {
+    this.Assert.equal(
+      pickedResult.id,
+      expectedResult.id,
+      "Picked result has the expected id"
+    );
+    if (lazy.UrlbarPrefs.get("ipc.chromeMessagePassing")) {
+      this.Assert.equal(
+        pickedElement,
+        null,
+        "Picked element is null on the message path"
+      );
+    } else {
+      this.Assert.equal(pickedElement, expectedElement, "Picked element");
+    }
+  }
+
+  /**
    * Asserts that the input is in a given search mode, or no search mode. Can
    * only be used if UrlbarTestUtils has been initialized with init().
    *
@@ -1042,7 +1126,7 @@ class UrlbarInputTestUtils {
       expectedSearchMode.isGeneralPurposeEngine = isGeneralPurposeEngine;
     }
 
-    // expectedSearchMode may come from UrlbarUtils.LOCAL_SEARCH_MODES.  The
+    // expectedSearchMode may come from UrlbarShared.LOCAL_SEARCH_MODES.  The
     // objects in that array include useful metadata like icon URIs and pref
     // names that are not usually included in actual search mode objects.  For
     // convenience, ignore those properties if they aren't also present in the
@@ -1410,6 +1494,10 @@ class UrlbarInputTestUtils {
       },
       options
     );
+    // The child controller arms the event bufferer when a query starts; a real
+    // input always has one, so give the mock's input a no-op stand-in. Set here
+    // after the merge, since a caller-supplied `input` replaces the default one.
+    parentOptions.input.eventBufferer = { queryStarting() {} };
     // The parent controller resolves the browser window from its actor (for the
     // SAP window facts telemetry reads). Mock a minimal one representing a
     // non-blank, non-extension page, exposed on the stubbed actor.
@@ -1857,6 +1945,34 @@ class UrlbarInputTestUtils {
     return zonedNow;
   }
 
+  /**
+   * Stubs `UrlbarUtils._firstDayOfWeek()`. Helpful for tests that use
+   * `UrlbarUtils.formatDate()`.
+   *
+   * Browser tests should call this again with a falsey value during cleanup to
+   * remove the stub.
+   *
+   * @param {?number} firstDay
+   *   A valid day integer from 1 to 7 inclusive. 1 is Monday, 7 is Sunday. A
+   *   falsey value removes the stub.
+   */
+  stubFirstDayOfWeek(firstDay) {
+    if (!firstDay) {
+      this.#firstDayOfWeekStub?.restore();
+      this.#firstDayOfWeekStub = null;
+      return;
+    }
+
+    if (!this.#firstDayOfWeekStub) {
+      this.#firstDayOfWeekStub = lazy.sinon.stub(
+        UrlbarUtils,
+        "_firstDayOfWeek"
+      );
+    }
+    this.#firstDayOfWeekStub.returns(firstDay);
+  }
+
+  #firstDayOfWeekStub;
   #urlbar;
   #zonedDateTimeISOStub;
 }
@@ -1948,7 +2064,7 @@ class TestProvider extends UrlbarProvider {
    *   An array of UrlbarResult objects that will be the provider's results.
    * @param {string} [options.name]
    *   The provider's name.  Provider names should be unique.
-   * @param {Values<typeof UrlbarUtils.PROVIDER_TYPE>} [options.type]
+   * @param {Values<typeof lazy.UrlbarShared.PROVIDER_TYPE>} [options.type]
    *   The provider's type.
    * @param {number} [options.priority]
    *   The provider's priority.  Built-in providers have a priority of zero.
@@ -1982,7 +2098,7 @@ class TestProvider extends UrlbarProvider {
   constructor({
     results = [],
     name = "TestProvider" + Services.uuid.generateUUID(),
-    type = UrlbarUtils.PROVIDER_TYPE.PROFILE,
+    type = lazy.UrlbarShared.PROVIDER_TYPE.PROFILE,
     priority = 0,
     addTimeout = 0,
     getViewTemplate = null,
@@ -2013,7 +2129,7 @@ class TestProvider extends UrlbarProvider {
     // As this has been a common source of mistakes, auto-upgrade the provider
     // type to heuristic if any result is heuristic.
     if (!type && this.results?.some(r => r.heuristic)) {
-      this._type = UrlbarUtils.PROVIDER_TYPE.HEURISTIC;
+      this._type = lazy.UrlbarShared.PROVIDER_TYPE.HEURISTIC;
     }
 
     if (getViewTemplate) {

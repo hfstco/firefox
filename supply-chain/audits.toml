@@ -25,7 +25,7 @@ who = "Martin Thomson <mt@lowentropy.net>"
 criteria = "safe-to-deploy"
 user-id = 128763 # Martin Thomson (martinthomson)
 start = "2022-08-04"
-end = "2026-02-01"
+end = "2027-07-20"
 notes = "Though the code is safe to run and deploy, the code for processing HTTP/1.1 messages (the `read-http` feature, specifically) is not suited for deployment in real applications, either clients or servers.  Some features necessary for live deployment are not implemented, such as the proper handling of some types of response (e.g., a response to a HEAD request).  Software that processes HTTP/1.1 messages requires a large number of compatibility tweaks if it is to be deployed interoperably.  This feature only exists to support basic validation tools and is unlikely to be widely compatible."
 
 [[wildcard-audits.breakpad-symbols]]
@@ -312,6 +312,14 @@ criteria = "safe-to-deploy"
 user-id = 66068
 start = "2020-07-10"
 end = "2027-02-01"
+
+[[wildcard-audits.glean-sym]]
+who = "Jan-Erik Rediger <jrediger@mozilla.com>"
+criteria = "safe-to-deploy"
+user-id = 48 # Jan-Erik Rediger (badboy)
+start = "2026-07-20"
+end = "2027-07-20"
+notes = "The Glean SDKs are maintained by the Glean Team at Mozilla."
 
 [[wildcard-audits.glslopt]]
 who = "Jamie Nicol <jnicol@mozilla.com>"
@@ -1364,6 +1372,11 @@ who = "Alex Franchuk <afranchuk@mozilla.com>"
 criteria = "safe-to-deploy"
 delta = "0.1.1 -> 0.2.1"
 notes = "Very minor changes."
+
+[[audits.cfg_aliases]]
+who = "Erich Gubler <erichdongubler@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.2.1 -> 0.2.2"
 
 [[audits.cgl]]
 who = "Sotaro Ikeda <sotaro.ikeda.g@gmail.com>"
@@ -2747,6 +2760,11 @@ notes = "Simple hasher implementation with no unsafe code."
 who = "Erich Gubler <erichdongubler@gmail.com>"
 criteria = "safe-to-deploy"
 delta = "0.1.5 -> 0.2.0"
+
+[[audits.font-types]]
+who = "Emily McDonough <emcdonough@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "0.8.3 -> 0.12.1"
 
 [[audits.foreign-types]]
 who = "Teodor Tanasoaia <ttanasoaia@mozilla.com>"
@@ -4753,9 +4771,9 @@ criteria = "safe-to-deploy"
 delta = "0.3.0 -> 0.4.1"
 
 [[audits.mtu]]
-who = ["Henrik Skupin <mail@hskupin.info>", "Lars Eggert <leggert@mozilla.com>"]
+who = "Max Inden <mail@max-inden.de>"
 criteria = "safe-to-deploy"
-delta = "0.4.1 -> 0.4.1@git:18832752db4700df4bdbb26f655b675931b234ac"
+delta = "0.4.1 -> 0.4.1@git:e2a2a7459b8b51778b50209251a61fc5ca020893"
 importable = false
 
 [[audits.naga]]
@@ -5883,6 +5901,11 @@ who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
 delta = "1.10.1 -> 1.10.2"
 
+[[audits.read-fonts]]
+who = "Emily McDonough <emcdonough@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "0.27.3 -> 0.41.0"
+
 [[audits.redox_syscall]]
 who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
@@ -6498,6 +6521,11 @@ who = "Emilio Cobos Álvarez <emilio@crisal.io>"
 criteria = "safe-to-deploy"
 delta = "0.3.11 -> 1.0.1"
 notes = "Only change to the crate source is adding documentation."
+
+[[audits.skrifa]]
+who = "Emily McDonough <emcdonough@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "0.29.0 -> 0.44.0"
 
 [[audits.slab]]
 who = "Mike Hommey <mh+mozilla@glandium.org>"

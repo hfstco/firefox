@@ -2,6 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+import { AppConstants } from "resource://gre/modules/AppConstants.sys.mjs";
+
 const DOH_DOORHANGER_DECISION_PREF = "doh-rollout.doorhanger-decision";
 const NETWORK_TRR_MODE_PREF = "network.trr.mode";
 
@@ -16,6 +18,7 @@ const ALLOWED_ABOUT_PAGES = new Set([
   "preferences",
   "privatebrowsing",
   "protections",
+  "referrals",
   "settings",
   "welcome",
   "newtab",
@@ -30,12 +33,18 @@ ChromeUtils.defineESModuleGetters(lazy, {
   AIWindow:
     // eslint-disable-next-line mozilla/no-browser-refs-in-toolkit
     "moz-src:///browser/components/aiwindow/ui/modules/AIWindow.sys.mjs",
+  CustomIconManager:
+    // eslint-disable-next-line mozilla/no-browser-refs-in-toolkit
+    "moz-src:///browser/components/shell/CustomIconManager.sys.mjs",
   // eslint-disable-next-line mozilla/no-browser-refs-in-toolkit
   CustomizableUI:
     "moz-src:///browser/components/customizableui/CustomizableUI.sys.mjs",
   ExperimentAPI: "resource://nimbus/ExperimentAPI.sys.mjs",
   FxAccounts: "resource://gre/modules/FxAccounts.sys.mjs",
   GenAI: "resource:///modules/GenAI.sys.mjs",
+  ICON_CATALOG:
+    // eslint-disable-next-line mozilla/no-browser-refs-in-toolkit
+    "moz-src:///browser/components/shell/CustomIconManager.sys.mjs",
   IPProtection:
     // eslint-disable-next-line mozilla/no-browser-refs-in-toolkit
     "moz-src:///browser/components/ipprotection/IPProtection.sys.mjs",
@@ -48,6 +57,8 @@ ChromeUtils.defineESModuleGetters(lazy, {
   PlacesUtils: "resource://gre/modules/PlacesUtils.sys.mjs",
   PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
   // eslint-disable-next-line mozilla/no-browser-refs-in-toolkit
+  Referrals: "resource:///modules/referrals/Referrals.sys.mjs",
+  // eslint-disable-next-line mozilla/no-browser-refs-in-toolkit
   SelectableProfileService:
     "resource:///modules/profiles/SelectableProfileService.sys.mjs",
   SessionStore: "resource:///modules/sessionstore/SessionStore.sys.mjs",
@@ -57,6 +68,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   TaskbarTabs: "resource:///modules/taskbartabs/TaskbarTabs.sys.mjs",
   UIState: "resource://services-sync/UIState.sys.mjs",
   UITour: "moz-src:///browser/components/uitour/UITour.sys.mjs",
+  WindowsLaunchOnLogin: "resource://gre/modules/WindowsLaunchOnLogin.sys.mjs",
 });
 
 export const SpecialMessageActions = {
@@ -123,11 +135,19 @@ export const SpecialMessageActions = {
   /**
    * Pin Firefox to taskbar.
    *
-   * @param {Window} window Reference to a window object
-   * @param {boolean} pin Private Browsing Mode if true
+   * @param {Window} window
+   * @param {object} options
+   * @param {boolean} options.privatePin Whether the pinned launcher should open
+   *   a private window. Defaults to false.
+   * @param {boolean} options.fireAndForget User confirmation is often necessary
+   *   due to OS restrictions. This means an OS notification appears asking for
+   *   confirmation. By default, this API will only resolve when the user has
+   *   confirmed the action, so it will hang until the prompt is dismissed. This
+   *   parameter makes the API resolve after the prompt is shown, but before the
+   *   user has confirmed or rejected the action. Defaults to false.
    */
-  pinFirefoxToTaskbar(window, privateBrowsing = false) {
-    return window.getShellService().pinToTaskbar(privateBrowsing);
+  pinFirefoxToTaskbar(window, { privatePin, fireAndForget } = {}) {
+    return window.getShellService().pinToTaskbar(privatePin, fireAndForget);
   },
 
   /**
@@ -352,6 +372,7 @@ export const SpecialMessageActions = {
     // Array of prefs that are allowed to be edited by SET_PREF
     const allowedPrefs = [
       "browser.aboutwelcome.didSeeFinalScreen",
+      "browser.sessionstore.newTabOnRestore",
       "browser.smartwindow.enabled",
       "browser.smartwindow.firstrun.hasCompleted",
       "browser.smartwindow.firstrun.modelChoice",
@@ -476,7 +497,7 @@ export const SpecialMessageActions = {
     if (!(await lazy.FxAccounts.canConnectAccount())) {
       return false;
     }
-    // In practice, all FxA signin flows will have a "ervice", because that param dictates the
+    // In practice, all FxA signin flows will have a "service", because that param dictates the
     // UI shown by FxA. But to be extra cautious, this code treats it as optional.
     let neededService = data?.extraParams?.service;
     const url = await lazy.FxAccounts.config.promiseConnectAccountURI(
@@ -699,6 +720,30 @@ export const SpecialMessageActions = {
     }
   },
 
+  /**
+   * Change the browser icon to the one identified by `id` via
+   * CustomIconManager. Icon IDs that are not in the catalog are ignored. The
+   * "default" id reverts to the browser's own icon (the no-override state).
+   *
+   * CustomIconManager is only packaged on Windows, so this is a no-op on other
+   * platforms to avoid importing a module that does not exist.
+   *
+   * @param {string} id A key in ICON_CATALOG.
+   */
+  async setBrowserIcon(id) {
+    if (AppConstants.platform !== "win") {
+      return;
+    }
+    if (!lazy.ICON_CATALOG[id]) {
+      return;
+    }
+    if (id === "default") {
+      await lazy.CustomIconManager.revert();
+      return;
+    }
+    await lazy.CustomIconManager.apply(id);
+  },
+
   async createAndOpenProfile() {
     await lazy.SelectableProfileService.createNewProfile(
       true,
@@ -855,7 +900,7 @@ export const SpecialMessageActions = {
         );
         break;
       case "PIN_FIREFOX_TO_TASKBAR":
-        await this.pinFirefoxToTaskbar(window, action.data?.privatePin);
+        await this.pinFirefoxToTaskbar(window, action.data);
         break;
       case "PIN_TASKBAR_TAB":
         return this.pinTaskbarTab(action.data);
@@ -863,12 +908,15 @@ export const SpecialMessageActions = {
         await this.pinToStartMenu(window);
         break;
       case "PIN_AND_DEFAULT":
-        // We must explicitly await pinning to the taskbar before
-        // trying to set as default. If we fall back to setting
-        // as default through the Windows Settings menu that interferes
-        // with showing the pinning notification as we no longer have
-        // window focus.
-        await this.pinFirefoxToTaskbar(window, action.data?.privatePin);
+        // If setDefaultBrowser is called before the pinning action, the OS will
+        // focus the Settings window, preventing the pinning confirmation toast
+        // from appearing. So we must pin first and await the action. There are
+        // two ways of doing this, however. By default, the set default prompt
+        // and Settings window will not appear until the user has accepted or
+        // rejected the pinning toast. The `fireAndForget` param will wait only
+        // for the pinning toast to be shown, so both toasts will appear at
+        // approximately the same time, but timed to avoid the race.
+        await this.pinFirefoxToTaskbar(window, action.data);
         await this.setDefaultBrowser(window);
         break;
       case "SET_DEFAULT_BROWSER":
@@ -895,20 +943,12 @@ export const SpecialMessageActions = {
           action.data?.openInFirefox ?? false
         );
         break;
-      case "CONFIRM_LAUNCH_ON_LOGIN": {
-        const { WindowsLaunchOnLogin } = ChromeUtils.importESModule(
-          "resource://gre/modules/WindowsLaunchOnLogin.sys.mjs"
-        );
-        await WindowsLaunchOnLogin.createLaunchOnLogin();
+      case "CONFIRM_LAUNCH_ON_LOGIN":
+        await lazy.WindowsLaunchOnLogin.createLaunchOnLogin();
         break;
-      }
-      case "REMOVE_LAUNCH_ON_LOGIN": {
-        const { WindowsLaunchOnLogin } = ChromeUtils.importESModule(
-          "resource://gre/modules/WindowsLaunchOnLogin.sys.mjs"
-        );
-        await WindowsLaunchOnLogin.removeLaunchOnLogin();
+      case "REMOVE_LAUNCH_ON_LOGIN":
+        await lazy.WindowsLaunchOnLogin.removeLaunchOnLogin();
         break;
-      }
       case "CREATE_GROUP_FROM_CURRENT_TAB": {
         let tab =
           window.gBrowser.getTabForBrowser(browser) ??
@@ -1092,9 +1132,39 @@ export const SpecialMessageActions = {
         }
         break;
       }
-      case "IPPROTECTION_ENROLL":
+      case "IPPROTECTION_ENROLL": {
         await lazy.IPProtection.getPanel(window)?.enroll();
         break;
+      }
+      case "SET_BROWSER_ICON": {
+        await this.setBrowserIcon(action.data.id);
+        break;
+      }
+      case "GET_REFERRAL_CODE": {
+        let referralsEnabled = Services.prefs.getBoolPref(
+          "browser.referrals.enabled"
+        );
+        let referralCode = lazy.Referrals.getReferralCode();
+        let aboutPageURL = new URL(`about:referrals`);
+
+        if (!referralsEnabled) {
+          throw new Error(
+            "Cannot generate referral code; referrals disabled by pref"
+          );
+        }
+
+        if (action.data.entrypoint) {
+          aboutPageURL.searchParams.set("entrypoint", action.data.entrypoint);
+        }
+
+        aboutPageURL.searchParams.set("ref_key", referralCode);
+
+        window.openTrustedLinkIn(
+          aboutPageURL.toString(),
+          action.data.where || "tab"
+        );
+        break;
+      }
       default:
         throw new Error(
           `Special message action with type ${action.type} is unsupported.`

@@ -272,6 +272,33 @@ let JSWINDOWACTORS = {
     remoteTypes: ["parent"],
   },
 
+  SmartWindowTasks: {
+    parent: {
+      esModuleURI:
+        "moz-src:///browser/components/aiwindow/ui/actors/SmartWindowTasksParent.sys.mjs",
+    },
+    child: {
+      esModuleURI:
+        "moz-src:///browser/components/aiwindow/ui/actors/SmartWindowTasksChild.sys.mjs",
+      events: {
+        "SmartWindowTasks:RequestListMonitors": { wantUntrusted: true },
+        "SmartWindowTasks:RequestCreateMonitor": { wantUntrusted: true },
+        "SmartWindowTasks:RequestDeleteMonitor": { wantUntrusted: true },
+        "SmartWindowTasks:RequestUpdateMonitor": { wantUntrusted: true },
+        "SmartWindowTasks:RequestRunMonitor": { wantUntrusted: true },
+        "SmartWindowTasks:RequestPauseMonitor": { wantUntrusted: true },
+        "SmartWindowTasks:RequestConstants": { wantUntrusted: true },
+      },
+    },
+    allFrames: true,
+    // TODO: Remove chrome:// URL and "parent" remoteType before landing
+    // These are only for development while about:smartwindowtasks registration lands
+    matches: ["about:smartwindowtasks"],
+    includeChrome: true,
+    remoteTypes: ["privilegedabout"],
+    enablePreference: "browser.smartwindow.enabled",
+  },
+
   BackupUI: {
     parent: {
       esModuleURI: "resource:///actors/BackupUIParent.sys.mjs",
@@ -737,6 +764,29 @@ let JSWINDOWACTORS = {
       },
     },
     matches: ["about:editprofile", "about:deleteprofile", "about:newprofile"],
+    remoteTypes: ["privilegedabout"],
+  },
+
+  ThemePicker: {
+    parent: {
+      esModuleURI: "resource:///actors/ThemePickerParent.sys.mjs",
+    },
+    child: {
+      esModuleURI: "resource:///actors/ThemePickerChild.sys.mjs",
+      events: {
+        ThemePickerGetInitialState: { wantUntrusted: true },
+        ThemePickerUpdateTheme: { wantUntrusted: true },
+        ThemePickerUpdateAppearance: { wantUntrusted: true },
+        ThemePickerUpdateNativeTheme: { wantUntrusted: true },
+      },
+    },
+    matches: [
+      "about:editprofile",
+      "about:newprofile",
+      "about:newtab",
+      "about:home",
+      "about:welcome",
+    ],
     remoteTypes: ["privilegedabout"],
   },
 

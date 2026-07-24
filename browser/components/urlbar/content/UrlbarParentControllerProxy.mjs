@@ -5,8 +5,7 @@
 const lazy = {};
 
 ChromeUtils.defineESModuleGetters(lazy, {
-  UrlbarQueryContext:
-    "moz-src:///browser/components/urlbar/UrlbarUtils.sys.mjs",
+  UrlbarQueryContext: "chrome://browser/content/urlbar/UrlbarQueryContext.mjs",
   UrlbarResult: "chrome://browser/content/urlbar/UrlbarResult.mjs",
 });
 
@@ -120,6 +119,46 @@ export class UrlbarParentControllerProxy {
     });
   }
 
+  /**
+   * Ships a search-mode entry to the parent recorder. The counterpart to the
+   * controller's `recordSearchMode()`.
+   *
+   * @param {object} searchMode The search mode being entered.
+   */
+  recordSearchMode(searchMode) {
+    this.#actor.sendAsyncMessage("RecordSearchMode", {
+      instanceId: this.#instanceId,
+      searchMode,
+    });
+  }
+
+  /**
+   * Ships a search-form visit to the parent recorder, which resolves the engine
+   * by name. The counterpart to the controller's `recordSearchForm()`.
+   *
+   * @param {string} engineName The name of the engine whose form was visited.
+   */
+  recordSearchForm(engineName) {
+    this.#actor.sendAsyncMessage("RecordSearchForm", {
+      instanceId: this.#instanceId,
+      engineName,
+    });
+  }
+
+  /**
+   * Ships a search to the parent recorder, which resolves the engine by name
+   * and the browser by id. The counterpart to the controller's `recordSearch()`.
+   *
+   * @param {object} options
+   *   `{engineName, searchSource, browserId, details}`.
+   */
+  recordSearch(options) {
+    this.#actor.sendAsyncMessage("RecordSearch", {
+      instanceId: this.#instanceId,
+      ...options,
+    });
+  }
+
   // Named to match the controller property the child controller forwards to.
   get _lastQueryContextWrapper() {
     return this.#lastQueryContextWrapper;
@@ -193,6 +232,34 @@ export class UrlbarParentControllerProxy {
       result: result.toWire(),
       queryContext: context.toWire(),
       reason,
+    });
+  }
+
+  /**
+   * Loads a URL in the embedder browser. The params are structured-cloned to
+   * the parent; the target browser is resolved there from `loadData.browserId`.
+   *
+   * @param {object} loadData The serializable load parameters.
+   * @returns {Promise<{reverted: boolean}>} Whether the input should revert.
+   */
+  loadURL(loadData) {
+    return this.#actor.sendQuery("LoadURL", {
+      instanceId: this.#instanceId,
+      loadData,
+    });
+  }
+
+  /**
+   * Focuses the browser a deferred-Enter load targeted, resolved parent-side
+   * from `browserId`.
+   *
+   * @param {number} [browserId] The browser the load resolved to, as returned by `loadURL`.
+   * @returns {Promise<{focused: boolean}>} Whether the browser was focused.
+   */
+  focusBrowser(browserId) {
+    return this.#actor.sendQuery("FocusBrowser", {
+      instanceId: this.#instanceId,
+      browserId,
     });
   }
 

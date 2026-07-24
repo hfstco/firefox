@@ -288,7 +288,7 @@ add_task(async function test_search_icon_change() {
   });
 
   let newWin = await BrowserTestUtils.openNewBrowserWindow();
-  const globeIconUrl = UrlbarUtils.ICON.GLOBE;
+  const globeIconUrl = UrlbarShared.ICON.GLOBE;
 
   Assert.equal(
     UrlbarTestUtils.getSearchModeSwitcherIcon(newWin),
@@ -779,13 +779,12 @@ add_task(async function test_readonly() {
 });
 
 add_task(async function test_search_service_fail() {
-  let newWin = await BrowserTestUtils.openNewBrowserWindow();
-
-  const stub = sinon
-    .stub(UrlbarSearchUtils, "init")
-    .rejects(new Error("Initialization failed"));
-
+  let stub = sinon
+    .stub(SearchService, "promiseInitialized")
+    .get(() => Promise.reject(new Error("Initialization failed")));
   SearchService.forceInitializationStatusForTests("failed");
+
+  let newWin = await BrowserTestUtils.openNewBrowserWindow();
 
   // Force updateSearchIcon to be triggered
   await SpecialPowers.pushPrefEnv({
@@ -799,7 +798,7 @@ add_task(async function test_search_service_fail() {
 
   Assert.equal(
     searchModeSwitcherIconUrl,
-    UrlbarUtils.ICON.GLOBE,
+    UrlbarShared.ICON.GLOBE,
     "The search mode switcher should have the globe icon url since the search service init failed."
   );
 
@@ -818,10 +817,7 @@ add_task(async function test_search_service_fail() {
   await popupHidden;
 
   stub.restore();
-
   SearchService.forceInitializationStatusForTests("success");
-  UrlbarSearchUtils.resetInitPromiseForTests();
-  await UrlbarSearchUtils.init();
 
   await BrowserTestUtils.closeWindow(newWin);
   await SpecialPowers.popPrefEnv();
@@ -845,7 +841,7 @@ add_task(async function test_search_mode_switcher_engine_no_icon() {
 
   Assert.equal(
     UrlbarTestUtils.getSearchModeSwitcherIcon(window),
-    UrlbarUtils.ICON.SEARCH_GLASS,
+    UrlbarShared.ICON.SEARCH_GLASS,
     "The search mode switcher should display the default search glass icon when the engine has no icon."
   );
 

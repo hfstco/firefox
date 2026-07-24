@@ -84,7 +84,6 @@ use crate::prim_store::picture::{Picture, PictureKey};
 use crate::picture_composite_mode::PictureCompositeKey;
 use crate::prim_store::text_run::TextRun;
 use crate::render_backend::SceneView;
-use crate::resource_cache::ImageRequest;
 use crate::scene::{BuiltScene, Scene, ScenePipeline, SceneStats, StackingContextHelpers};
 use crate::scene_builder_thread::Interners;
 use crate::spatial_node::{
@@ -2729,7 +2728,7 @@ impl<'a> SceneBuilder<'a> {
             handle,
             spatial_node_index,
             region_rect,
-            Au::from_f32_px(snap_outset),
+            snap_outset,
         );
     }
 
@@ -2807,11 +2806,9 @@ impl<'a> SceneBuilder<'a> {
                 match border.source {
                     NinePatchBorderSource::Image(key, rendering) => {
                         let prim = ImageBorder {
-                            request: ImageRequest {
-                                key,
-                                rendering,
-                                tile: None,
-                            },
+                            key,
+                            rendering,
+                            tile: None,
                             nine_patch,
                         };
 
@@ -2902,7 +2899,7 @@ impl<'a> SceneBuilder<'a> {
     }
 
     pub fn create_linear_gradient_prim(
-        &mut self,
+        &self,
         info: &LayoutPrimitiveInfo,
         start_point: LayoutPoint,
         end_point: LayoutPoint,
@@ -2959,7 +2956,6 @@ impl<'a> SceneBuilder<'a> {
             reverse_stops,
             nine_patch,
             edge_aa_mask,
-            enable_dithering: self.config.enable_dithering,
         })
     }
 

@@ -1936,7 +1936,7 @@ void PeerConnectionImpl::OnDtlsStateChange(
   for (const auto& cert : aRemoteCerts) {
     certsCopy.AppendElement(cert.Clone());
   }
-  dtlsTransport->UpdateState(aState, std::move(certsCopy), aError);
+  dtlsTransport->UpdateState(aState, std::move(certsCopy), std::move(aError));
   // Whenever the state of an RTCDtlsTransport changes or when the [[IsClosed]]
   // slot turns true, the user agent MUST update the connection state by
   // queueing a task that runs the following steps:
@@ -1962,7 +1962,7 @@ void PeerConnectionImpl::OnDtlsStateChange(
 void PeerConnectionImpl::OnRtcpStateChange(const std::string& aTransportId,
                                            TransportLayer::State aState,
                                            Maybe<dom::RTCErrorParams> aError) {
-  OnDtlsStateChange(aTransportId, aState, {}, aError);
+  OnDtlsStateChange(aTransportId, aState, {}, std::move(aError));
 }
 
 RTCPeerConnectionState PeerConnectionImpl::GetNewConnectionState() const {
@@ -4848,7 +4848,6 @@ std::unique_ptr<NrSocketProxyConfig> PeerConnectionImpl::GetProxyConfig()
     return nullptr;
   }
 
-  nsCString alpn = "webrtc,c-webrtc"_ns;
   auto* browserChild = BrowserChild::GetFrom(mWindow);
   if (!browserChild) {
     // Android doesn't have browser child apparently...
@@ -4875,7 +4874,7 @@ std::unique_ptr<NrSocketProxyConfig> PeerConnectionImpl::GetProxyConfig()
   MOZ_ALWAYS_SUCCEEDS(
       mozilla::ipc::LoadInfoToLoadInfoArgs(loadInfo, &loadInfoArgs));
   return std::make_unique<NrSocketProxyConfig>(
-      net::WebrtcProxyConfig(id, alpn, loadInfoArgs, mForceProxy));
+      net::WebrtcProxyConfig(id, loadInfoArgs, mForceProxy));
 }
 
 MOZ_RUNINIT std::map<uint64_t, PeerConnectionAutoTimer>

@@ -1187,8 +1187,7 @@ toolbarbutton[constrain-size="true"][cui-areatype="panel"] > .toolbarbutton-badg
   fill: currentColor;
 }
 
-#PanelUI-fxa-menu-create-profile-button,
-#appMenu-create-profile-button {
+#PanelUI-fxa-menu-create-profile-button {
   list-style-image: url("chrome://global/skin/icons/users.svg");
 }
 
@@ -1912,8 +1911,8 @@ toolbarbutton[itemtype="showinactivebutton"] {
     url(chrome://browser/skin/panic-panel/header.png),
     url(chrome://browser/skin/panic-panel/header@2x.png) 2x
   );
-  max-height: var(--size-item-xlarge);
-  width: var(--size-item-xlarge);
+  max-height: var(--icon-size-xxlarge);
+  width: var(--icon-size-xxlarge);
 }
 
 #panic-button-success-header {
@@ -2436,13 +2435,6 @@ radiogroup:focus-visible > .subviewradio[focused="true"] {
 }
 
 /* Report Broken Site panels */
-
-/* Hide the Report Broken Site menu item that
- * is on the App Menu's Help sub-menu.
- */
-#appMenu_help_reportBrokenSite {
-  display: none;
-}
 
 .report-broken-site-view {
   max-height: 80vh;

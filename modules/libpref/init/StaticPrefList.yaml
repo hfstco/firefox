@@ -2894,6 +2894,29 @@
   value: false
   mirror: always
 
+# Preferences for document-language metadata extraction.
+#
+# How long a metadata request waits for the document load event before
+# collecting a single text sample from the current document anyway.
+- name: dom.document_language_metadata.load_timeout_ms
+  type: uint32_t
+  value: 4000
+  mirror: always
+
+# Base delay for metadata request retries. Each retry waits for this
+# duration multiplied by the retry count.
+- name: dom.document_language_metadata.retry_delay_base_ms
+  type: uint32_t
+  value: 500
+  mirror: always
+
+# Maximum number of retry attempts for metadata requests that extract less
+# than the requested minimum code units.
+- name: dom.document_language_metadata.max_retries
+  type: uint32_t
+  value: 3
+  mirror: always
+
 # Legacy behavior: include named properties in [[OwnPropertyKeys]] for the
 # Window named properties object (see bug 2011056).
 - name: dom.window.named_properties_object.legacy_own_property_keys
@@ -6358,7 +6381,7 @@
 - name: dom.webshare.enabled
   type: bool
 #ifdef XP_WIN
-  value: @IS_EARLY_BETA_OR_EARLIER@
+  value: @IS_NIGHTLY_BUILD@
 #else
   value: false
 #endif
@@ -8803,6 +8826,19 @@
   type: bool
   rust: true
   value: true
+  mirror: once
+
+# Number of WebRender backend threads in the shared pool.
+#
+# `0` disables the shared pool entirely and gives each window its own private
+# render-backend thread (the historical behavior).
+#
+# Any value `>= 1` enables a single shared `RenderBackendPool` of N backend
+# threads across all windows in this process. Windows are assigned to a
+# member round-robin at creation time.
+- name: gfx.webrender.render-backend-thread-count
+  type: uint32_t
+  value: 2
   mirror: once
 
 # Enable dithering in hardware WebRender
@@ -11776,7 +11812,7 @@
 # Per-domain blocklist for ::-webkit-scrollbar pseudo element
 - name: layout.css.fake-webkit-scrollbar.disabled-domains
   type: DataMutexString
-  value: "discord.com,shitposter.world"
+  value: "discord.com,shitposter.world,gemini.google.com"
   mirror: always
   rust: true
 
@@ -13410,31 +13446,6 @@
 - name: media.media-capabilities.screen.enabled
   type: RelaxedAtomicBool
   value: false
-  mirror: always
-
-- name: media.benchmark.vp9.fps
-  type: RelaxedAtomicUint32
-  value: 0
-  mirror: always
-
-- name: media.benchmark.vp9.threshold
-  type: RelaxedAtomicUint32
-  value: 150
-  mirror: always
-
-- name: media.benchmark.vp9.versioncheck
-  type: RelaxedAtomicUint32
-  value: 0
-  mirror: always
-
-- name: media.benchmark.frames
-  type: RelaxedAtomicUint32
-  value: 300
-  mirror: always
-
-- name: media.benchmark.timeout
-  type: RelaxedAtomicUint32
-  value: 1000
   mirror: always
 
 - name: media.test.video-suspend

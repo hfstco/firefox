@@ -7,8 +7,7 @@ const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   UrlbarParentController:
     "moz-src:///browser/components/urlbar/UrlbarParentController.sys.mjs",
-  UrlbarQueryContext:
-    "moz-src:///browser/components/urlbar/UrlbarUtils.sys.mjs",
+  UrlbarQueryContext: "chrome://browser/content/urlbar/UrlbarQueryContext.mjs",
   UrlbarResult: "chrome://browser/content/urlbar/UrlbarResult.mjs",
 });
 
@@ -95,6 +94,15 @@ export class UrlbarParent extends JSWindowActorParent {
       case "TrackBounceBrowser":
         controller.trackBounceBrowser(message.data.browserId);
         break;
+      case "RecordSearchMode":
+        controller.recordSearchMode(message.data.searchMode);
+        break;
+      case "RecordSearchForm":
+        controller.recordSearchForm(message.data.engineName);
+        break;
+      case "RecordSearch":
+        controller.recordSearch(message.data);
+        break;
       case "StartQuery":
         // Round-trips so the proxy's startQuery resolves at true completion with
         // the finished context. The context's results keep their data in private
@@ -114,6 +122,10 @@ export class UrlbarParent extends JSWindowActorParent {
           message.data.reason
         );
         break;
+      case "LoadURL":
+        return controller.loadURL(message.data.loadData);
+      case "FocusBrowser":
+        return controller.focusBrowser(message.data.browserId);
       case "RemoveResult":
         controller.removeResult(
           lazy.UrlbarResult.fromWire(message.data.result),
@@ -217,12 +229,16 @@ class ViewProxy {
     this.#invoke("acknowledgeFeedback", [result.toWire()]);
   }
 
-  close() {
-    this.#invoke("close", []);
+  close(options) {
+    this.#invoke("close", options ? [options] : []);
   }
 
   startTail150() {
     this.#invoke("startTail150", []);
+  }
+
+  updateResultMenuCommands(resultId, commands) {
+    this.#invoke("updateResultMenuCommands", [resultId, commands]);
   }
 }
 

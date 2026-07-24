@@ -10,15 +10,13 @@ const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   ContextualIdentityService:
     "moz-src:///toolkit/components/contextualidentity/ContextualIdentityService.sys.mjs",
-  SearchService: "moz-src:///toolkit/components/search/SearchService.sys.mjs",
-  UrlbarProviderOpenTabs:
-    "moz-src:///browser/components/urlbar/UrlbarProviderOpenTabs.sys.mjs",
   UrlbarPrefs: "moz-src:///browser/components/urlbar/UrlbarPrefs.sys.mjs",
   UrlbarProviderTopSites:
     "moz-src:///browser/components/urlbar/UrlbarProviderTopSites.sys.mjs",
   UrlbarResult: "chrome://browser/content/urlbar/UrlbarResult.mjs",
   UrlbarSearchOneOffs:
     "moz-src:///browser/components/urlbar/UrlbarSearchOneOffs.sys.mjs",
+  UrlbarShared: "chrome://browser/content/urlbar/UrlbarShared.mjs",
   UrlbarUtils: "moz-src:///browser/components/urlbar/UrlbarUtils.sys.mjs",
 });
 
@@ -556,20 +554,16 @@ export class UrlbarView {
   }
 
   async acknowledgeFeedback(result) {
-    let row = this.#rows.children[result.rowIndex];
+    let row = this.#getRowByResultId(result.id);
     if (!row) {
       return;
     }
-    // Compare against the row's own result rather than `result`: across the
-    // actor boundary `result` is a wire copy, so an identity check would always
-    // fail. This still guards against the row's result changing during the
-    // async l10n fetch below, though it can't confirm the row still matches the
-    // dismissed result -- that needs a stable result id (Bug 2052875).
-    let { result: rowResult } = row;
 
     let l10n = { id: "urlbar-feedback-acknowledgment" };
     await this.#l10nCache.ensure(l10n);
-    if (row.result != rowResult) {
+    // Confirm the row still holds the dismissed result: a re-query may have
+    // swapped it during the async l10n fetch above.
+    if (row.result?.id != result.id) {
       return;
     }
 
@@ -587,8 +581,8 @@ export class UrlbarView {
    *   The localization object shown as dismissed feedback.
    */
   #acknowledgeDismissal(result, titleL10n) {
-    let row = this.#rows.children[result.rowIndex];
-    if (!row || row.result != result) {
+    let row = this.#getRowByResultId(result.id);
+    if (!row) {
       return;
     }
 
@@ -673,7 +667,7 @@ export class UrlbarView {
     // implicitly unselected.
     if (this.input.searchMode?.isPreview) {
       this.input.searchMode = null;
-      this.chromeWindow.gBrowser.userTypedValue = null;
+      this.input.userTypedValue = null;
     }
 
     this.resultMenu.hide?.();
@@ -1085,9 +1079,7 @@ export class UrlbarView {
    * Handles removing a result from the view when it is removed from the query,
    * and attempts to select the new result on the same row.
    *
-   * This assumes that the result rows are in index order.
-   *
-   * @param {number} index The index of the result that has been removed.
+   * @param {number} id The id of the UrlbarResult that has been removed.
    * @param {object} [acknowledgeDismissalL10n]
    *   The dismissal-acknowledgment l10n the dismissing provider set on the
    *   result, supplied by the caller. It isn't read from this row's result
@@ -1095,8 +1087,21 @@ export class UrlbarView {
    *   process, so this row's result -- a query-time snapshot -- never received
    *   it. Undefined when the row is removed without acknowledgment.
    */
-  onQueryResultRemoved(index, acknowledgeDismissalL10n) {
-    let rowToRemove = this.#rows.children[index];
+  onQueryResultRemoved(id, acknowledgeDismissalL10n) {
+    let removedIndex = -1;
+    let rowToRemove = null;
+    for (let i = 0; i < this.#rows.children.length; i++) {
+      if (this.#rows.children[i].result?.id === id) {
+        removedIndex = i;
+        rowToRemove = this.#rows.children[i];
+        break;
+      }
+    }
+    if (!rowToRemove) {
+      // The row is already gone, e.g. a re-query replaced the results before
+      // this notification arrived over the actor.
+      return;
+    }
 
     let { result } = rowToRemove;
     if (acknowledgeDismissalL10n) {
@@ -1112,13 +1117,14 @@ export class UrlbarView {
     if (!updateSelection) {
       return;
     }
-    // Select the row at the same index, if possible.
-    let newSelectionIndex = index;
-    if (index >= this.#queryContext.results.length) {
-      newSelectionIndex = this.#queryContext.results.length - 1;
-    }
-    // A negative index clears the selection, which resets the input value
-    // when no results remain.
+    // Select the row that shifted into the removed row's position, clamping to
+    // the last remaining row when the last row was removed. A negative index
+    // clears the selection, which resets the input value when no results
+    // remain.
+    let newSelectionIndex = Math.min(
+      removedIndex,
+      this.#rows.children.length - 1
+    );
     this.selectedRowIndex = newSelectionIndex;
   }
 
@@ -1131,12 +1137,24 @@ export class UrlbarView {
   }
 
   /**
-   * Clears the result menu commands cache, removing the cached commands for all
-   * results. This is useful when the commands for one or more results change
-   * while the results remain in the view.
+   * Refreshes a result's menu commands while it stays in the view (e.g. a "show
+   * less frequently" cap is reached, removing that command), replacing the baked
+   * commands and dropping the stale cache entry so the menu rebuilds from them.
+   * The UrlbarResult is located by id so this works on the message path, where
+   * the provider runs against a different result instance than the view's row.
+   *
+   * @param {number} resultId
+   *   The id of the UrlbarResult whose commands changed.
+   * @param {?UrlbarResultCommand[]} commands
+   *   The UrlbarResult's new menu commands.
    */
-  invalidateResultMenuCommands() {
-    this.#resultMenuCommands = new WeakMap();
+  updateResultMenuCommands(resultId, commands) {
+    let row = this.#getRowByResultId(resultId);
+    if (!row) {
+      return;
+    }
+    row.result.commands = commands;
+    this.#resultMenuCommands.delete(row.result);
   }
 
   /**
@@ -1607,7 +1625,7 @@ export class UrlbarView {
     }
 
     let bookmarked = item._elements.get("explanationBookmarked");
-    let hasBookmark = setURL && !!result.payload.bookmarkDateMs;
+    let hasBookmark = !!result.payload.bookmarkDateMs;
     if (hasBookmark) {
       let { formattedDate } = lazy.UrlbarUtils.formatDate(
         new Date(result.payload.bookmarkDateMs),
@@ -1625,16 +1643,27 @@ export class UrlbarView {
     let lastVisited = item._elements.get("explanationLastVisited");
     let hasLastVisit = setURL && !!result.payload.lastVisit;
     if (hasLastVisit) {
-      let { isRelative, formattedDate } = lazy.UrlbarUtils.formatDate(
+      let { formattedDate, dateFormatType } = lazy.UrlbarUtils.formatDate(
         new Date(result.payload.lastVisit)
       );
-      this.document.l10n.setAttributes(
-        lastVisited,
-        isRelative
-          ? "urlbar-result-explanation-last-visited-relative-2"
-          : "urlbar-result-explanation-last-visited-absolute-2",
-        { date: formattedDate }
-      );
+      let l10nId;
+      switch (dateFormatType) {
+        case lazy.UrlbarUtils.DATE_FORMAT_TYPE.YESTERDAY_TODAY_TOMORROW:
+          l10nId = "urlbar-result-explanation-last-visited-relative-2";
+          break;
+        case lazy.UrlbarUtils.DATE_FORMAT_TYPE.DAYS_WEEKS_MONTHS_AGO:
+          l10nId =
+            "urlbar-result-explanation-last-visited-days-weeks-months-ago";
+          break;
+        case lazy.UrlbarUtils.DATE_FORMAT_TYPE.ABSOLUTE:
+          l10nId = "urlbar-result-explanation-last-visited-absolute-2";
+          break;
+        default:
+          throw new Error("Unhandled date format type: " + dateFormatType);
+      }
+      this.document.l10n.setAttributes(lastVisited, l10nId, {
+        date: formattedDate,
+      });
     } else {
       this.#l10nCache.removeElementL10n(lastVisited);
     }
@@ -2642,7 +2671,7 @@ export class UrlbarView {
       (result.type == UrlbarShared.RESULT_TYPE.SEARCH ||
         result.type == UrlbarShared.RESULT_TYPE.KEYWORD)
     ) {
-      return lazy.UrlbarUtils.ICON.HISTORY;
+      return lazy.UrlbarShared.ICON.HISTORY;
     }
 
     if (iconUrlOverride) {
@@ -2663,17 +2692,17 @@ export class UrlbarView {
       result.type == UrlbarShared.RESULT_TYPE.SEARCH &&
       result.payload.trending
     ) {
-      return lazy.UrlbarUtils.ICON.TRENDING;
+      return lazy.UrlbarShared.ICON.TRENDING;
     }
 
     if (
       result.type == UrlbarShared.RESULT_TYPE.SEARCH ||
       result.type == UrlbarShared.RESULT_TYPE.KEYWORD
     ) {
-      return lazy.UrlbarUtils.ICON.SEARCH_GLASS;
+      return lazy.UrlbarShared.ICON.SEARCH_GLASS;
     }
 
-    return lazy.UrlbarUtils.ICON.DEFAULT;
+    return lazy.UrlbarShared.ICON.DEFAULT;
   }
 
   #getBlobUrlForResult(result, blob) {
@@ -3034,7 +3063,7 @@ export class UrlbarView {
     }
 
     let engineName =
-      row.result.payload.engine || lazy.SearchService.defaultEngine.name;
+      row.result.payload.engine || this.controller.engineStore.default?.name;
 
     if (row.result.payload.trending) {
       return {
@@ -3417,6 +3446,22 @@ export class UrlbarView {
     return element?.closest(".urlbarView-row");
   }
 
+  /**
+   * @param {number} id
+   *   A UrlbarResult id.
+   * @returns {Element|null}
+   *   The row currently displaying the result with that id, or null. A result
+   *   appears in the view at most once, so this matches at most one row.
+   */
+  #getRowByResultId(id) {
+    for (let row of this.#rows.children) {
+      if (row.result?.id === id) {
+        return row;
+      }
+    }
+    return null;
+  }
+
   #setAccessibleFocus(item) {
     if (item) {
       if (!item.id) {
@@ -3536,9 +3581,7 @@ export class UrlbarView {
 
     if (
       result.type == UrlbarShared.RESULT_TYPE.TAB_SWITCH &&
-      lazy.UrlbarProviderOpenTabs.isContainerUserContextId(
-        result.payload.userContextId
-      )
+      UrlbarShared.isContainerUserContextId(result.payload.userContextId)
     ) {
       if (!contextualIdentityAction) {
         contextualIdentityAction = actionNode.cloneNode(true);
@@ -3857,23 +3900,13 @@ export class UrlbarView {
     // ongoing. Generally there's no reason for our string-caching paths to be
     // async and it may even be a bad idea (except for the final necessary
     // `this.#l10nCache.ensureAll()` call).
-    if (!lazy.SearchService.hasSuccessfullyInitialized) {
+    if (!this.controller.engineStore.initialized) {
       return [];
     }
 
     let idArgs = [];
 
-    let { defaultEngine, defaultPrivateEngine } = lazy.SearchService;
-    let engineNames = [defaultEngine?.name, defaultPrivateEngine?.name].filter(
-      engineName => engineName
-    );
-
-    if (defaultPrivateEngine) {
-      idArgs.push({
-        id: "urlbar-result-action-search-in-private-w-engine",
-        args: { engine: defaultPrivateEngine.name },
-      });
-    }
+    let defaultEngineName = this.controller.engineStore.default.name;
 
     let engineStringIDs = [
       "urlbar-result-action-tabtosearch-web",
@@ -3881,21 +3914,17 @@ export class UrlbarView {
       "urlbar-result-action-search-w-engine",
     ];
     for (let id of engineStringIDs) {
-      idArgs.push(
-        ...engineNames.map(engineName => ({
-          id,
-          args: { engine: engineName },
-        }))
-      );
+      idArgs.push({
+        id,
+        args: { engine: defaultEngineName },
+      });
     }
 
     if (lazy.UrlbarPrefs.get("groupLabels.enabled")) {
-      idArgs.push(
-        ...engineNames.map(engineName => ({
-          id: "urlbar-group-search-suggestions",
-          args: { engine: engineName },
-        }))
-      );
+      idArgs.push({
+        id: "urlbar-group-search-suggestions",
+        args: { engine: defaultEngineName },
+      });
     }
 
     return idArgs;
@@ -3988,7 +4017,7 @@ export class UrlbarView {
 
     let localSearchMode;
     if (source) {
-      localSearchMode = lazy.UrlbarUtils.LOCAL_SEARCH_MODES.find(
+      localSearchMode = lazy.UrlbarShared.LOCAL_SEARCH_MODES.find(
         m => m.source == source
       );
     }
@@ -4107,7 +4136,7 @@ export class UrlbarView {
         if (item._originalActionSetter) {
           item._originalActionSetter();
           if (result.heuristic) {
-            favicon.src = result.payload.icon || lazy.UrlbarUtils.ICON.DEFAULT;
+            favicon.src = result.payload.icon || lazy.UrlbarShared.ICON.DEFAULT;
           }
         } else {
           console.error("An item is missing the action setter");
@@ -4128,7 +4157,7 @@ export class UrlbarView {
       if (!iconOverride && (localSearchMode || engine)) {
         // For one-offs without an icon, do not allow restyled URL results to
         // use their own icons.
-        iconOverride = lazy.UrlbarUtils.ICON.SEARCH_GLASS;
+        iconOverride = lazy.UrlbarShared.ICON.SEARCH_GLASS;
       }
       if (
         result.heuristic ||

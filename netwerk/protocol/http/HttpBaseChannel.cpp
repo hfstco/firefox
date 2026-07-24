@@ -2459,7 +2459,7 @@ HttpBaseChannel::GetProtocolVersion(nsACString& aProtocolVersion) {
         NS_SUCCEEDED(mSecurityInfo->GetNegotiatedNPN(protocol)) &&
         !protocol.IsEmpty()) {
       // The negotiated protocol was not empty so we can use it.
-      aProtocolVersion = protocol;
+      aProtocolVersion = std::move(protocol);
       return NS_OK;
     }
   }
@@ -3989,6 +3989,13 @@ HttpBaseChannel::HTTPUpgrade(const nsACString& aProtocolName,
   NS_ENSURE_ARG(!aProtocolName.IsEmpty());
   NS_ENSURE_ARG_POINTER(aListener);
 
+  // The protocol name is emitted verbatim into the Upgrade request header, so
+  // reject anything that could inject additional headers or requests (e.g. an
+  // embedded CRLF from a compromised child process).
+  if (!nsHttp::IsReasonableHeaderValue(aProtocolName)) {
+    return NS_ERROR_ILLEGAL_VALUE;
+  }
+
   mUpgradeProtocol = aProtocolName;
   mUpgradeProtocolCallback = aListener;
   return NS_OK;
@@ -4410,7 +4417,7 @@ HttpBaseChannel::GetEntityID(nsACString& aEntityID) {
   entityID.Append(lastmod);
   // NOTE: Appending lastmod as the last part avoids having to escape it
 
-  aEntityID = entityID;
+  aEntityID = std::move(entityID);
 
   return NS_OK;
 }

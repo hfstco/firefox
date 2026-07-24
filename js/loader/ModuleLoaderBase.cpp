@@ -19,6 +19,7 @@
 #include "nsContentUtils.h"
 #include "nsICacheInfoChannel.h"  // nsICacheInfoChannel
 #include "nsNetUtil.h"            // NS_NewURI
+#include "ScriptLoaderInterface.h"
 #include "ScriptLoadRequest.h"
 #include "xpcpublic.h"
 
@@ -1174,6 +1175,12 @@ void ModuleLoaderBase::AddToResolvedModuleSet(
 
   bool isPreloadModule = aFetchInfo && aFetchInfo->IsForModuleScript() &&
                          aFetchInfo->IsForModulePreload();
+
+  // aHostDefined is undefined only for dynamic imports. The preload flag is
+  // flipped to false once a preloaded request is reused, so by the time a
+  // dynamic import runs its fetch info no longer reports a preload. A module
+  // that still reports a preload here therefore cannot be a dynamic import.
+  MOZ_ASSERT_IF(isPreloadModule, !aHostDefined.isUndefined());
   if (isPreloadModule) {
     RefPtr<ModuleLoadRequest> root = GetPreloadRootModuleRequest(aHostDefined);
     AddToPreloadedResolvedSet(root, std::move(aRecord));
@@ -1530,6 +1537,8 @@ ModuleLoaderBase::~ModuleLoaderBase() {
 
   LOG(("ModuleLoaderBase::~ModuleLoaderBase %p", this));
 }
+
+nsIURI* ModuleLoaderBase::GetBaseURI() const { return mLoader->GetBaseURI(); }
 
 void ModuleLoaderBase::CancelFetchingModules() {
   for (const auto& entry : mFetchingModules) {

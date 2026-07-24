@@ -295,6 +295,7 @@ class DefaultTabManagerController(
             fenixBrowserUseCases.addNewHomepageTab(
                 private = isPrivate,
             )
+            handleNavigateToHome()
         } else {
             navController.popBackStack()
             navController.navigate(
@@ -635,10 +636,6 @@ class DefaultTabManagerController(
             handleNavigateToHome()
         } else {
             handleNavigateToBrowser()
-        }
-
-        if (!appStore.state.mode.isPrivate && settings.privateBrowsingLockedFeatureEnabled) {
-            appStore.dispatch(AppAction.PrivateBrowsingLockAction.UpdatePrivateBrowsingLock(isLocked = true))
         }
     }
 

@@ -337,11 +337,14 @@ class MacroAssemblerRiscv64 : public Assembler {
   void ma_cselnz(Register rd, Register rs1, Register rs2, Register rc,
                  Register rtmp);
 
-  void computeScaledAddress(const BaseIndex& address, Register dest);
+  void computeScaledAddress(
+      const BaseIndex& address, Register dest,
+      wasm::ZeroExtendIndex zeroExtend = wasm::ZeroExtendIndex::No);
   void computeScaledAddress32(const BaseIndex& address, Register dest);
 
-  Address computeScaledAddress(const BaseIndex& address,
-                               UseScratchRegisterScope& temps);
+  Address computeScaledAddress(
+      const BaseIndex& address, UseScratchRegisterScope& temps,
+      wasm::ZeroExtendIndex zeroExtend = wasm::ZeroExtendIndex::No);
 
  private:
   bool UseShortBranch(Label* L, JumpKind jumpKind, OffsetSize bits,
@@ -501,14 +504,18 @@ class MacroAssemblerRiscv64 : public Assembler {
   void Dror(Register rd, Register rs, Imm32 rt);
   void Dror(Register rd, Register rs, Register rt);
 
-  void Float32Max(FPURegister dst, FPURegister src1, FPURegister src2);
-  void Float32Min(FPURegister dst, FPURegister src1, FPURegister src2);
-  void Float64Max(FPURegister dst, FPURegister src1, FPURegister src2);
-  void Float64Min(FPURegister dst, FPURegister src1, FPURegister src2);
+  void Float32Max(FPURegister dst, FPURegister src1, FPURegister src2,
+                  bool handleNaN);
+  void Float32Min(FPURegister dst, FPURegister src1, FPURegister src2,
+                  bool handleNaN);
+  void Float64Max(FPURegister dst, FPURegister src1, FPURegister src2,
+                  bool handleNaN);
+  void Float64Min(FPURegister dst, FPURegister src1, FPURegister src2,
+                  bool handleNaN);
 
   template <typename F>
   void FloatMinMaxHelper(FPURegister dst, FPURegister src1, FPURegister src2,
-                         MaxMinKind kind);
+                         MaxMinKind kind, bool handleNaN);
 
   inline void NegateBool(Register rd, Register rs) { xori(rd, rs, 1); }
 
@@ -547,14 +554,18 @@ class MacroAssemblerRiscv64 : public Assembler {
                              uint64_t offset);
 
   void wasmLoadImpl(const wasm::MemoryAccessDesc& access, Register memoryBase,
-                    Register ptr, AnyRegister output);
+                    Register ptr, AnyRegister output,
+                    wasm::ZeroExtendIndex zeroExtend);
   void wasmStoreImpl(const wasm::MemoryAccessDesc& access, AnyRegister value,
-                     Register memoryBase, Register ptr);
+                     Register memoryBase, Register ptr,
+                     wasm::ZeroExtendIndex zeroExtend);
 
   void wasmLoadImpl(const wasm::MemoryAccessDesc& access,
-                    const BaseIndex& address, AnyRegister output);
+                    const BaseIndex& address, AnyRegister output,
+                    wasm::ZeroExtendIndex zeroExtend);
   void wasmStoreImpl(const wasm::MemoryAccessDesc& access, AnyRegister value,
-                     const BaseIndex& address);
+                     const BaseIndex& address,
+                     wasm::ZeroExtendIndex zeroExtend);
 };
 
 class MacroAssemblerRiscv64Compat : public MacroAssemblerRiscv64 {
@@ -563,9 +574,7 @@ class MacroAssemblerRiscv64Compat : public MacroAssemblerRiscv64 {
 
   MacroAssemblerRiscv64Compat() {}
 
-  void convertBoolToInt32(Register src, Register dest) {
-    andi(dest, src, 0xff);
-  };
+  void convertBoolToInt32(Register src, Register dest) { zext_b(dest, src); };
   void convertInt32ToDouble(Register src, FloatRegister dest) {
     fcvt_d_w(dest, src);
   };
@@ -624,8 +633,10 @@ class MacroAssemblerRiscv64Compat : public MacroAssemblerRiscv64 {
     ma_add64(dest, address.base, Imm32(address.offset));
   }
 
-  void computeEffectiveAddress(const BaseIndex& address, Register dest) {
-    computeScaledAddress(address, dest);
+  void computeEffectiveAddress(
+      const BaseIndex& address, Register dest,
+      wasm::ZeroExtendIndex zeroExtend = wasm::ZeroExtendIndex::No) {
+    computeScaledAddress(address, dest, zeroExtend);
     if (address.offset) {
       ma_add64(dest, dest, Imm32(address.offset));
     }

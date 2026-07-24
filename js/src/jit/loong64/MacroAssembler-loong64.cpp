@@ -1125,7 +1125,7 @@ void MacroAssemblerLOONG64::ma_b(Address addr, ImmGCPtr imm, Label* label,
 }
 
 void MacroAssemblerLOONG64::ma_bl(Label* label) {
-  spew("branch .Llabel %p\n", label);
+  LabelDoc target = refLabel(label);
   if (label->bound()) {
     // Generate the long jump for calls because return address has to be
     // the address after the reserved block.
@@ -1133,7 +1133,7 @@ void MacroAssemblerLOONG64::ma_bl(Label* label) {
     UseScratchRegisterScope temps(asMasm());
     Register scratch = temps.Acquire();
     ma_liPatchable(scratch, ImmWord(LabelBase::INVALID_OFFSET));
-    as_jirl(ra, scratch, BOffImm16(0));
+    as_jirl(ra, scratch, BOffImm16(0), target);
     return;
   }
 
@@ -1145,8 +1145,7 @@ void MacroAssemblerLOONG64::ma_bl(Label* label) {
   // instructions are writing at below.
   m_buffer.ensureSpace(5 * sizeof(uint32_t));
 
-  spew("bal .Llabel %p\n", label);
-  BufferOffset bo = writeInst(getBranchCode(BranchIsCall).encode());
+  BufferOffset bo = emit(getBranchCode(BranchIsCall).encode(), target);
   writeInst(nextInChain);
   if (!oom()) {
     label->use(bo.getOffset());
@@ -1160,9 +1159,7 @@ void MacroAssemblerLOONG64::ma_bl(Label* label) {
 void MacroAssemblerLOONG64::branchWithCode(InstImm code, Label* label,
                                            JumpKind jumpKind,
                                            Register scratch) {
-  // simply output the pointer of one label as its id,
-  // notice that after one label destructor, the pointer will be reused.
-  spew("branch .Llabel %p", label);
+  LabelDoc target = refLabel(label);
   MOZ_ASSERT(code.encode() !=
              InstImm(op_jirl, BOffImm16(0), zero, ra).encode());
   InstImm inst_beq = InstImm(op_beq, BOffImm16(0), zero, zero);
@@ -1183,10 +1180,7 @@ void MacroAssemblerLOONG64::branchWithCode(InstImm code, Label* label,
       } else {
         code.setBOffImm16(BOffImm16(offset));
       }
-#ifdef JS_JITSPEW
-      decodeBranchInstAndSpew(code);
-#endif
-      writeInst(code.encode());
+      emit(code.encode(), target);
       return;
     }
 
@@ -1198,10 +1192,10 @@ void MacroAssemblerLOONG64::branchWithCode(InstImm code, Label* label,
         UseScratchRegisterScope temps(asMasm());
         Register scratch = temps.Acquire();
         ma_liPatchable(scratch, ImmWord(LabelBase::INVALID_OFFSET));
-        as_jirl(zero, scratch, BOffImm16(0));  // jr scratch
+        as_jirl(zero, scratch, BOffImm16(0), target);  // jr scratch
       } else {
         ma_liPatchable(scratch, ImmWord(LabelBase::INVALID_OFFSET));
-        as_jirl(zero, scratch, BOffImm16(0));  // jr scratch
+        as_jirl(zero, scratch, BOffImm16(0), target);  // jr scratch
       }
       as_nop();
       return;
@@ -1210,21 +1204,17 @@ void MacroAssemblerLOONG64::branchWithCode(InstImm code, Label* label,
     // OpenLongJump
     // Handle long conditional branch, the target offset is based on self,
     // point to next instruction of nop at below.
-    spew("invert branch .Llabel %p", label);
     InstImm code_r = invertBranch(code, BOffImm16(5 * sizeof(uint32_t)));
-#ifdef JS_JITSPEW
-    decodeBranchInstAndSpew(code_r);
-#endif
-    writeInst(code_r.encode());
+    emit(code_r.encode());
     addLongJump(nextOffset(), BufferOffset(label->offset()));
     if (scratch == Register::Invalid()) {
       UseScratchRegisterScope temps(asMasm());
       Register scratch = temps.Acquire();
       ma_liPatchable(scratch, ImmWord(LabelBase::INVALID_OFFSET));
-      as_jirl(zero, scratch, BOffImm16(0));  // jr scratch
+      as_jirl(zero, scratch, BOffImm16(0), target);  // jr scratch
     } else {
       ma_liPatchable(scratch, ImmWord(LabelBase::INVALID_OFFSET));
-      as_jirl(zero, scratch, BOffImm16(0));  // jr scratch
+      as_jirl(zero, scratch, BOffImm16(0), target);  // jr scratch
     }
     as_nop();
     return;
@@ -1242,10 +1232,7 @@ void MacroAssemblerLOONG64::branchWithCode(InstImm code, Label* label,
 
     // Indicate that this is short jump with offset 4.
     code.setBOffImm16(BOffImm16(4));
-#ifdef JS_JITSPEW
-    decodeBranchInstAndSpew(code);
-#endif
-    BufferOffset bo = writeInst(code.encode());
+    BufferOffset bo = emit(code.encode(), target);
     writeInst(nextInChain);
     if (!oom()) {
       label->use(bo.getOffset());
@@ -1259,10 +1246,7 @@ void MacroAssemblerLOONG64::branchWithCode(InstImm code, Label* label,
   // instructions are writing at below (contain conditional nop).
   m_buffer.ensureSpace(5 * sizeof(uint32_t));
 
-#ifdef JS_JITSPEW
-  decodeBranchInstAndSpew(code);
-#endif
-  BufferOffset bo = writeInst(code.encode());  // invert
+  BufferOffset bo = emit(code.encode(), target);  // invert
   writeInst(nextInChain);
   if (!oom()) {
     label->use(bo.getOffset());
@@ -1323,6 +1307,74 @@ void MacroAssemblerLOONG64::ma_cmp_set(Register rd, Address address,
   Register scratch = temps.Acquire();
   ma_ld_d(scratch, address);
   ma_cmp_set(rd, Register(scratch), imm, c);
+}
+
+void MacroAssemblerLOONG64::ma_cselz(Register rd, Register rj, Register rk,
+                                     Register rc, Register rtmp) {
+  // rd = (rc == 0) ? rj : rk
+
+  MOZ_ASSERT(rd != rtmp);
+
+  if (rj == rk) {
+    if (rd != rj) {
+      as_or(rd, rj, zero);
+    }
+    return;
+  }
+
+  if (rd == rc) {
+    if (rj != rtmp) {
+      as_maskeqz(rtmp, rk, rc);
+      as_masknez(rd, rj, rc);
+    } else {
+      as_masknez(rtmp, rj, rc);
+      as_maskeqz(rd, rk, rc);
+    }
+  } else {
+    if (rd == rk) {
+      as_maskeqz(rd, rk, rc);
+      as_masknez(rtmp, rj, rc);
+    } else {
+      as_masknez(rd, rj, rc);
+      as_maskeqz(rtmp, rk, rc);
+    }
+  }
+
+  as_or(rd, rd, rtmp);
+}
+
+void MacroAssemblerLOONG64::ma_cselnz(Register rd, Register rj, Register rk,
+                                      Register rc, Register rtmp) {
+  // rd = (rc != 0) ? rj : rk
+
+  MOZ_ASSERT(rd != rtmp);
+
+  if (rj == rk) {
+    if (rd != rj) {
+      as_or(rd, rj, zero);
+    }
+    return;
+  }
+
+  if (rd == rc) {
+    if (rj != rtmp) {
+      as_masknez(rtmp, rk, rc);
+      as_maskeqz(rd, rj, rc);
+    } else {
+      as_maskeqz(rtmp, rj, rc);
+      as_masknez(rd, rk, rc);
+    }
+  } else {
+    if (rd == rk) {
+      as_masknez(rd, rk, rc);
+      as_maskeqz(rtmp, rj, rc);
+    } else {
+      as_maskeqz(rd, rj, rc);
+      as_masknez(rtmp, rk, rc);
+    }
+  }
+
+  as_or(rd, rd, rtmp);
 }
 
 // fp instructions
@@ -1633,79 +1685,6 @@ void MacroAssemblerLOONG64::ma_mul32TestOverflow(Register rd, Register rj,
   as_mul_d(rd, rj, scratch);
   as_slli_w(scratch, rd, 0);
   ma_b(rd, scratch, overflow, Assembler::NotEqual);
-}
-
-void MacroAssemblerLOONG64::ma_mod_mask(Register src, Register dest,
-                                        Register hold, Register remain,
-                                        int32_t shift, Label* negZero) {
-  // MATH:
-  // We wish to compute x % (1<<y) - 1 for a known constant, y.
-  // First, let b = (1<<y) and C = (1<<y)-1, then think of the 32 bit
-  // dividend as a number in base b, namely
-  // c_0*1 + c_1*b + c_2*b^2 ... c_n*b^n
-  // now, since both addition and multiplication commute with modulus,
-  // x % C == (c_0 + c_1*b + ... + c_n*b^n) % C ==
-  // (c_0 % C) + (c_1%C) * (b % C) + (c_2 % C) * (b^2 % C)...
-  // now, since b == C + 1, b % C == 1, and b^n % C == 1
-  // this means that the whole thing simplifies to:
-  // c_0 + c_1 + c_2 ... c_n % C
-  // each c_n can easily be computed by a shift/bitextract, and the modulus
-  // can be maintained by simply subtracting by C whenever the number gets
-  // over C.
-  int32_t mask = (1 << shift) - 1;
-  Label head, negative, sumSigned, done;
-
-  // hold holds -1 if the value was negative, 1 otherwise.
-  // remain holds the remaining bits that have not been processed
-  // SecondScratchReg serves as a temporary location to store extracted bits
-  // into as well as holding the trial subtraction as a temp value dest is
-  // the accumulator (and holds the final result)
-
-  // move the whole value into the remain.
-  as_or(remain, src, zero);
-  // Zero out the dest.
-  ma_li(dest, Imm32(0));
-  // Set the hold appropriately.
-  ma_b(remain, remain, &negative, Signed, ShortJump);
-  ma_li(hold, Imm32(1));
-  ma_b(&head, ShortJump);
-
-  bind(&negative);
-  ma_li(hold, Imm32(-1));
-  as_sub_w(remain, zero, remain);
-
-  // Begin the main loop.
-  bind(&head);
-
-  UseScratchRegisterScope temps(asMasm());
-  Register scratch = temps.Acquire();
-  // Extract the bottom bits into SecondScratchReg.
-  ma_and(scratch, remain, Imm32(mask));
-  // Add those bits to the accumulator.
-  as_add_w(dest, dest, scratch);
-  // Do a trial subtraction
-  ma_sub_w(scratch, dest, Imm32(mask));
-  // If (sum - C) > 0, store sum - C back into sum, thus performing a
-  // modulus.
-  ma_b(scratch, Register(scratch), &sumSigned, Signed, ShortJump);
-  as_or(dest, scratch, zero);
-  bind(&sumSigned);
-  // Get rid of the bits that we extracted before.
-  as_srli_w(remain, remain, shift);
-  // If the shift produced zero, finish, otherwise, continue in the loop.
-  ma_b(remain, remain, &head, NonZero, ShortJump);
-  // Check the hold to see if we need to negate the result.
-  ma_b(hold, hold, &done, NotSigned, ShortJump);
-
-  if (negZero != nullptr) {
-    // Jump out in case of negative zero.
-    ma_b(dest, dest, negZero, Zero);
-  }
-  // If the hold was non-zero, negate the result to be in line with
-  // what JS wants
-  as_sub_w(dest, zero, dest);
-
-  bind(&done);
 }
 
 // Memory.
@@ -2098,11 +2077,25 @@ void MacroAssemblerLOONG64::ma_cmp_set_double(Register dest, FloatRegister lhs,
   as_movcf2gr(dest, FCC0);
 }
 
+void MacroAssemblerLOONG64::ma_cmp_set_double(FPConditionBit fcc,
+                                              FloatRegister lhs,
+                                              FloatRegister rhs,
+                                              DoubleCondition c) {
+  compareFloatingPoint(DoubleFloat, lhs, rhs, c, fcc);
+}
+
 void MacroAssemblerLOONG64::ma_cmp_set_float32(Register dest, FloatRegister lhs,
                                                FloatRegister rhs,
                                                DoubleCondition c) {
   compareFloatingPoint(SingleFloat, lhs, rhs, c);
   as_movcf2gr(dest, FCC0);
+}
+
+void MacroAssemblerLOONG64::ma_cmp_set_float32(FPConditionBit fcc,
+                                               FloatRegister lhs,
+                                               FloatRegister rhs,
+                                               DoubleCondition c) {
+  compareFloatingPoint(SingleFloat, lhs, rhs, c, fcc);
 }
 
 void MacroAssemblerLOONG64::ma_cmp_set(Register rd, Register rj, Imm32 imm,
@@ -2271,6 +2264,15 @@ void MacroAssemblerLOONG64::minMaxDouble(FloatRegister srcDest,
                                          bool isMax) {
   if (srcDest == second) return;
 
+  if (!handleNaN) {
+    if (isMax) {
+      as_fmax_d(srcDest, srcDest, second);
+    } else {
+      as_fmin_d(srcDest, srcDest, second);
+    }
+    return;
+  }
+
   Label nan, done;
 
   // First or second is NaN, result is NaN.
@@ -2292,6 +2294,15 @@ void MacroAssemblerLOONG64::minMaxFloat32(FloatRegister srcDest,
                                           FloatRegister second, bool handleNaN,
                                           bool isMax) {
   if (srcDest == second) return;
+
+  if (!handleNaN) {
+    if (isMax) {
+      as_fmax_s(srcDest, srcDest, second);
+    } else {
+      as_fmin_s(srcDest, srcDest, second);
+    }
+    return;
+  }
 
   Label nan, done;
 
@@ -2890,7 +2901,7 @@ CodeOffset MacroAssembler::farJumpWithPatch() {
   as_jirl(zero, scratch, BOffImm16(0));
   // Allocate space which will be patched by patchFarJump().
   CodeOffset farJump(currentOffset());
-  spew(".space 32bit initValue 0xffff ffff");
+  comment(".space 32bit [0xffff'ffff]");
   writeInst(UINT32_MAX);
   return farJump;
 }
@@ -3188,6 +3199,22 @@ void MacroAssembler::branchTestNaNValue(Condition cond, const ValueOperand& val,
   static_assert(JS::detail::CanonicalizedNaNSignBit == 0);
   moveValue(DoubleValue(JS::GenericNaN()), ValueOperand(scratch));
   ma_b(temp, scratch, label, cond);
+}
+
+void MacroAssembler::testValueSet(Condition cond, const ValueOperand& lhs,
+                                  const Value& rhs, Register dest) {
+  MOZ_ASSERT(cond == Equal || cond == NotEqual);
+  MOZ_ASSERT(!rhs.isNaN());
+
+  if (!rhs.isGCThing()) {
+    cmpPtrSet(cond, lhs.valueReg(), ImmWord(rhs.asRawBits()), dest);
+  } else {
+    UseScratchRegisterScope temps(asMasm());
+    Register scratch = temps.Acquire();
+    MOZ_ASSERT(lhs.valueReg() != scratch);
+    moveValue(rhs, ValueOperand(scratch));
+    cmpPtrSet(cond, lhs.valueReg(), scratch, dest);
+  }
 }
 
 // ========================================================================

@@ -615,6 +615,18 @@ MediaResult FFmpegVideoDecoder<LIBAV_VER>::InitVulkanDecoder() {
     return NS_ERROR_NOT_AVAILABLE;
   }
 
+#    if LIBAVCODEC_VERSION_MAJOR == 60
+  // libavcodec 60 only supports the experimental VK_MESA_video_decode_av1,
+  // but RADV replaced it with stable VK_KHR_video_decode_av1 in Mesa 24.1.
+  // Skip Vulkan AV1 decoding so VA-API can take over.
+  if (mCodecID == AV_CODEC_ID_AV1) {
+    FFMPEG_LOG(
+        "Vulkan AV1 decode KHR extension is unavailable with libavcodec 60; "
+        "falling back");
+    return NS_ERROR_NOT_AVAILABLE;
+  }
+#    endif
+
   FFMPEG_LOG("Initialising Vulkan FFmpeg decoder");
 
   StaticMutexAutoLock mon(sMutex);
@@ -1428,73 +1440,6 @@ static bool IsKeyFrame(const AVFrame* aFrame) {
   return !!aFrame->key_frame;
 #endif
 }
-
-#if LIBAVCODEC_VERSION_MAJOR >= 58
-void FFmpegVideoDecoder<LIBAV_VER>::DecodeStats::DecodeStart() {
-  mDecodeStart = TimeStamp::Now();
-}
-
-bool FFmpegVideoDecoder<LIBAV_VER>::DecodeStats::IsDecodingSlow() const {
-  return mDecodedFramesLate > mMaxLateDecodedFrames;
-}
-
-void FFmpegVideoDecoder<LIBAV_VER>::DecodeStats::UpdateDecodeTimes(
-    int64_t aDuration) {
-  TimeStamp now = TimeStamp::Now();
-  double decodeTime = (now - mDecodeStart).ToMilliseconds();
-  mDecodeStart = now;
-
-  const double frameDuration = AssertedCast<double>(aDuration) / 1000.0;
-  if (frameDuration <= 0.0) {
-    FFMPEGV_LOG("Incorrect frame duration, skipping decode stats.");
-    return;
-  }
-
-  mDecodedFrames++;
-  mAverageFrameDuration =
-      (mAverageFrameDuration * AssertedCast<double>(mDecodedFrames - 1) +
-       frameDuration) /
-      AssertedCast<double>(mDecodedFrames);
-  mAverageFrameDecodeTime =
-      (mAverageFrameDecodeTime * AssertedCast<double>(mDecodedFrames - 1) +
-       decodeTime) /
-      AssertedCast<double>(mDecodedFrames);
-
-  FFMPEGV_LOG(
-      "Frame decode takes {:.2f} ms average decode time {:.2f} ms frame "
-      "duration "
-      "{:.2f} average frame duration {:.2f} decoded {} frames\n",
-      decodeTime, mAverageFrameDecodeTime, frameDuration, mAverageFrameDuration,
-      mDecodedFrames);
-
-  // Frame duration and frame decode times may vary and may not
-  // neccessarily lead to video playback failure.
-  //
-  // Checks frame decode time and recent frame duration and also
-  // frame decode time and average frame duration (video fps).
-  //
-  // Log a problem only if both indicators fails.
-  if (decodeTime > frameDuration && decodeTime > mAverageFrameDuration) {
-    PROFILER_MARKER_TEXT("FFmpegVideoDecoder::DoDecode", MEDIA_PLAYBACK, {},
-                         "frame decode takes too long");
-    mDecodedFramesLate++;
-    mLastDelayedFrameNum = mDecodedFrames;
-    FFMPEGV_LOG("  slow decode: failed to decode in time (decoded late {})",
-                mDecodedFramesLate);
-  } else if (mLastDelayedFrameNum) {
-    // Reset mDecodedFramesLate in case of correct decode during
-    // mDelayedFrameReset period.
-    double correctPlaybackTime =
-        AssertedCast<double>(mDecodedFrames - mLastDelayedFrameNum) *
-        mAverageFrameDuration;
-    if (correctPlaybackTime > mDelayedFrameReset) {
-      FFMPEGV_LOG("  mLastFramePts reset due to seamless decode period");
-      mDecodedFramesLate = 0;
-      mLastDelayedFrameNum = 0;
-    }
-  }
-}
-#endif
 
 MediaResult FFmpegVideoDecoder<LIBAV_VER>::DoDecode(
     MediaRawData* aSample, uint8_t* aData, int aSize, bool* aGotFrame,

@@ -69,6 +69,9 @@ LexerResult nsJXLDecoder::DoDecode(SourceBufferIterator& aIterator,
       }
 
       if (state == SourceBufferIterator::WAITING) {
+        MOZ_LOG(
+            sJXLLog, LogLevel::Verbose,
+            ("[this=%p] nsJXLDecoder::DoDecode -- yield NEED_MORE_DATA", this));
         return LexerResult(Yield::NEED_MORE_DATA);
       }
       if (state == SourceBufferIterator::COMPLETE) {
@@ -205,6 +208,9 @@ nsJXLDecoder::ProcessResult nsJXLDecoder::ProcessAvailableData(
     JxlDecoderStatus status = ProcessInput(aData, aLength);
 
     if (status == JxlDecoderStatus::Error) {
+      MOZ_LOG(sJXLLog, LogLevel::Debug,
+              ("[this=%p] nsJXLDecoder::ProcessAvailableData -- decode error",
+               this));
       return ProcessResult::Error;
     }
 
@@ -218,6 +224,10 @@ nsJXLDecoder::ProcessResult nsJXLDecoder::ProcessAvailableData(
       JxlBasicInfo basicInfo = jxl_decoder_get_basic_info(mDecoder.get());
       if (basicInfo.valid) {
         if (basicInfo.width > INT32_MAX || basicInfo.height > INT32_MAX) {
+          MOZ_LOG(sJXLLog, LogLevel::Debug,
+                  ("[this=%p] nsJXLDecoder::ProcessAvailableData -- dimensions "
+                   "%ux%u exceed INT32_MAX, failing",
+                   this, basicInfo.width, basicInfo.height));
           return ProcessResult::Error;
         }
 
@@ -234,6 +244,10 @@ nsJXLDecoder::ProcessResult nsJXLDecoder::ProcessAvailableData(
         }
 
         mDecoderState = DecoderState::HaveBasicInfo;
+        MOZ_LOG(sJXLLog, LogLevel::Debug,
+                ("[this=%p] nsJXLDecoder::ProcessAvailableData -- have basic "
+                 "info (animated=%d, hasAlpha=%d)",
+                 this, basicInfo.is_animated, basicInfo.has_alpha));
 
         // Allocate the pixel buffer for non-animated images here so that
         // FlushPartialFrame can render an LF preview during the LF-frame
@@ -288,10 +302,22 @@ nsJXLDecoder::ProcessResult nsJXLDecoder::ProcessAvailableData(
       case FrameOutputResult::NoOutput:
         continue;
       case FrameOutputResult::FrameAdvanced:
+        MOZ_LOG(sJXLLog, LogLevel::Verbose,
+                ("[this=%p] nsJXLDecoder::ProcessAvailableData -- frame "
+                 "advanced, yielding output",
+                 this));
         return ProcessResult::YieldOutput;
       case FrameOutputResult::DecodeComplete:
+        MOZ_LOG(
+            sJXLLog, LogLevel::Debug,
+            ("[this=%p] nsJXLDecoder::ProcessAvailableData -- decode complete",
+             this));
         return ProcessResult::Complete;
       case FrameOutputResult::Error:
+        MOZ_LOG(sJXLLog, LogLevel::Debug,
+                ("[this=%p] nsJXLDecoder::ProcessAvailableData -- frame output "
+                 "error",
+                 this));
         return ProcessResult::Error;
     }
     MOZ_CRASH("Unhandled FrameOutputResult");
@@ -299,6 +325,9 @@ nsJXLDecoder::ProcessResult nsJXLDecoder::ProcessAvailableData(
 }
 
 LexerResult nsJXLDecoder::DrainFrames() {
+  MOZ_LOG(sJXLLog, LogLevel::Verbose,
+          ("[this=%p] nsJXLDecoder::DrainFrames -- draining buffered frames",
+           this));
   while (true) {
     const uint8_t* noData = nullptr;
     size_t noLength = 0;
@@ -314,9 +343,15 @@ LexerResult nsJXLDecoder::DrainFrames() {
           case FrameOutputResult::BufferAllocated:
             break;
           case FrameOutputResult::FrameAdvanced:
+            MOZ_LOG(sJXLLog, LogLevel::Verbose,
+                    ("[this=%p] nsJXLDecoder::DrainFrames -- yield "
+                     "OUTPUT_AVAILABLE",
+                     this));
             return LexerResult(Yield::OUTPUT_AVAILABLE);
           case FrameOutputResult::DecodeComplete:
           case FrameOutputResult::NoOutput:
+            MOZ_LOG(sJXLLog, LogLevel::Debug,
+                    ("[this=%p] nsJXLDecoder::DrainFrames -- SUCCESS", this));
             return LexerResult(TerminalState::SUCCESS);
           case FrameOutputResult::Error:
             return LexerResult(TerminalState::FAILURE);
@@ -504,55 +539,130 @@ nsresult nsJXLDecoder::EnsureSurfacePipe() {
   return NS_OK;
 }
 
-void nsJXLDecoder::BuildCMSTransform() {
+qcms_profile* nsJXLDecoder::MaybeCreateInputProfileFromCICP() {
+  // Only RGB output maps to CICP; grayscale and CMYK use the ICC path.
+  if (mPixelFormat.value() != PixelFormat::Rgba8 &&
+      mPixelFormat.value() != PixelFormat::Rgba16f) {
+    return nullptr;
+  }
+
+  // The CICP enums have uint8_t as their underlying type, so their storage can
+  // be written through the uint8_t* out-params of the FFI (which can't traffic
+  // in the C++ enum types).
+  CICP::ColourPrimaries cicpPrimaries = CICP::ColourPrimaries::CP_UNSPECIFIED;
+  CICP::TransferCharacteristics cicpTransfer =
+      CICP::TransferCharacteristics::TC_UNSPECIFIED;
+  // qcms_intent is not a uint8_t-backed enum like the CICP enums above, so the
+  // FFI writes the rendering intent as a raw ICC code that we cast below.
+  uint8_t cicpIntent = 0;
+  if (!jxl_decoder_get_cicp(
+          mDecoder.get(), reinterpret_cast<uint8_t*>(&cicpPrimaries),
+          reinterpret_cast<uint8_t*>(&cicpTransfer), &cicpIntent)) {
+    return nullptr;
+  }
+
+  // We still want to use the ICC for the HDR transfer functions (PQ and HLG)
+  // because qcms currently doesn't tone map them, but the icc profile that
+  // jxl-rs synthesizes does a good job of tonemapping for us.
+  if (cicpTransfer == CICP::TC_SMPTE2084 || cicpTransfer == CICP::TC_HLG) {
+    return nullptr;
+  }
+
+  qcms_profile* profile = qcms_profile_create_cicp_with_intent(
+      cicpPrimaries, cicpTransfer, static_cast<qcms_intent>(cicpIntent));
+  MOZ_LOG(
+      sJXLLog, LogLevel::Debug,
+      ("[this=%p] nsJXLDecoder::MaybeCreateInputProfileFromCICP -- "
+       "CICP profile %s (primaries %u, transfer %u, intent %u)",
+       this, profile ? "created" : "creation FAILED",
+       static_cast<unsigned>(cicpPrimaries),
+       static_cast<unsigned>(cicpTransfer), static_cast<unsigned>(cicpIntent)));
+  return profile;
+}
+
+qcms_profile* nsJXLDecoder::MaybeCreateInputProfileFromICC() {
   size_t iccLen = 0;
   const uint8_t* iccData = jxl_decoder_get_icc_profile(mDecoder.get(), &iccLen);
-  if (iccData && iccLen) {
-    mInProfile = qcms_profile_from_memory(
-        reinterpret_cast<const char*>(iccData), iccLen);
-    if (mInProfile) {
-      auto intent = static_cast<qcms_intent>(gfxPlatform::GetRenderingIntent());
-      if (intent < QCMS_INTENT_MIN || intent > QCMS_INTENT_MAX) {
-        intent = qcms_profile_get_rendering_intent(mInProfile);
-      }
+  if (!iccData || !iccLen) {
+    return nullptr;
+  }
 
-      uint32_t profileSpace = qcms_profile_get_color_space(mInProfile);
-      qcms_data_type inType;
-      qcms_data_type outType;
-      bool compatible = true;
+  qcms_profile* profile =
+      qcms_profile_from_memory(reinterpret_cast<const char*>(iccData), iccLen);
+  if (!profile) {
+    MOZ_LOG(sJXLLog, LogLevel::Debug,
+            ("[this=%p] nsJXLDecoder::MaybeCreateInputProfileFromICC -- "
+             "failed to parse %zu-byte ICC profile",
+             this, iccLen));
+  }
+  return profile;
+}
 
-      if (profileSpace == icSigGrayData) {
-        if (mPixelFormat.value() != PixelFormat::Gray8 &&
-            mPixelFormat.value() != PixelFormat::GrayAlpha8) {
-          compatible = false;
-        }
-        // jxl-rs outputs Gray8 or GrayAlpha8; qcms produces Rgba8 output.
-        inType = mPixelFormat.value() == PixelFormat::GrayAlpha8
-                     ? QCMS_DATA_GRAYA_8
-                     : QCMS_DATA_GRAY_8;
-        outType = QCMS_DATA_RGBA_8;
-      } else if (profileSpace == icSigCmykData) {
-        if (mPixelFormat.value() != PixelFormat::Cmyk8) {
-          compatible = false;
-        }
-        // jxl-rs outputs C,M,Y,_ in Rgba8 positions; K in mKBuffer.
-        // qcms expects CMYK (0=no ink) and produces RGB8 output.
-        inType = QCMS_DATA_CMYK;
-        outType = QCMS_DATA_RGB_8;
-      } else {
-        if (mPixelFormat.value() != PixelFormat::Rgba8 &&
-            mPixelFormat.value() != PixelFormat::Rgba16f) {
-          compatible = false;
-        }
-        inType = QCMS_DATA_RGBA_8;
-        outType = QCMS_DATA_RGBA_8;
-      }
+void nsJXLDecoder::BuildCMSTransform() {
+  // Prefer building the input profile directly from the output color space's
+  // CICP code points; only fall back to the (larger, jxl-rs-synthesized) ICC
+  // when CICP can't represent it.
+  mInProfile = MaybeCreateInputProfileFromCICP();
+  if (!mInProfile) {
+    mInProfile = MaybeCreateInputProfileFromICC();
+  }
 
-      if (compatible) {
-        mTransform = qcms_transform_create(
-            mInProfile, inType, GetCMSOutputProfile(), outType, intent);
-      }
+  if (!mInProfile) {
+    MOZ_LOG(sJXLLog, LogLevel::Debug,
+            ("[this=%p] nsJXLDecoder::BuildCMSTransform -- no color profile "
+             "available, skipping CMS",
+             this));
+    return;
+  }
+
+  auto intent = static_cast<qcms_intent>(gfxPlatform::GetRenderingIntent());
+  if (intent < QCMS_INTENT_MIN || intent > QCMS_INTENT_MAX) {
+    intent = qcms_profile_get_rendering_intent(mInProfile);
+  }
+
+  uint32_t profileSpace = qcms_profile_get_color_space(mInProfile);
+  qcms_data_type inType;
+  qcms_data_type outType;
+  bool compatible = true;
+
+  if (profileSpace == icSigGrayData) {
+    if (mPixelFormat.value() != PixelFormat::Gray8 &&
+        mPixelFormat.value() != PixelFormat::GrayAlpha8) {
+      compatible = false;
     }
+    // jxl-rs outputs Gray8 or GrayAlpha8; qcms produces Rgba8 output.
+    inType = mPixelFormat.value() == PixelFormat::GrayAlpha8 ? QCMS_DATA_GRAYA_8
+                                                             : QCMS_DATA_GRAY_8;
+    outType = QCMS_DATA_RGBA_8;
+  } else if (profileSpace == icSigCmykData) {
+    if (mPixelFormat.value() != PixelFormat::Cmyk8) {
+      compatible = false;
+    }
+    // jxl-rs outputs C,M,Y,_ in Rgba8 positions; K in mKBuffer.
+    // qcms expects CMYK (0=no ink) and produces RGB8 output.
+    inType = QCMS_DATA_CMYK;
+    outType = QCMS_DATA_RGB_8;
+  } else {
+    if (mPixelFormat.value() != PixelFormat::Rgba8 &&
+        mPixelFormat.value() != PixelFormat::Rgba16f) {
+      compatible = false;
+    }
+    inType = QCMS_DATA_RGBA_8;
+    outType = QCMS_DATA_RGBA_8;
+  }
+
+  if (compatible) {
+    mTransform = qcms_transform_create(mInProfile, inType,
+                                       GetCMSOutputProfile(), outType, intent);
+    MOZ_LOG(sJXLLog, LogLevel::Debug,
+            ("[this=%p] nsJXLDecoder::BuildCMSTransform -- CMS transform %s "
+             "(color space 0x%x)",
+             this, mTransform ? "created" : "creation FAILED", profileSpace));
+  } else {
+    MOZ_LOG(sJXLLog, LogLevel::Debug,
+            ("[this=%p] nsJXLDecoder::BuildCMSTransform -- color space 0x%x "
+             "incompatible with pixel format, skipping CMS",
+             this, profileSpace));
   }
 }
 
@@ -687,6 +797,10 @@ nsresult nsJXLDecoder::FinishFrame() {
   // WritePixelRowsToPipe).
   bool hasTransparency =
       basicInfo.has_alpha && mPixelFormat.value() != PixelFormat::Cmyk8;
+  MOZ_LOG(sJXLLog, LogLevel::Debug,
+          ("[this=%p] nsJXLDecoder::FinishFrame -- frame %u committed, "
+           "hasTransparency=%d",
+           this, mFrameIndex, hasTransparency));
   PostFrameStop(hasTransparency ? Opacity::SOME_TRANSPARENCY
                                 : Opacity::FULLY_OPAQUE);
   mCurrentPipe.reset();
