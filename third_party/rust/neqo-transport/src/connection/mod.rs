@@ -1707,8 +1707,12 @@ impl Connection {
         }
 
         // Update SCONE signal.
-        if let Some(rate) = path.borrow_mut().update_scone(now, packet.scone()) {
-            qdebug!("[{self}] SCONE rate updated to {rate:x?}");
+        let scone = packet.scone();
+        if let Some(signal) = scone {
+            qinfo!("[{self}] SCONE packet received with signal {signal:x?}");
+        }
+        if let Some(rate) = path.borrow_mut().update_scone(now, scone) {
+            qdebug!("[{self}] Effective SCONE rate is {rate:x?}");
             self.events.scone_updated(rate);
         }
     }

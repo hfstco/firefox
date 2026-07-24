@@ -85,7 +85,7 @@ NS_IMETHODIMP Scone::Observe(nsISupports* aSubject, const char* aTopic,
 
 void Scone::RequestCurrentAdvice() {
   auto resolve = [self = RefPtr{this}](Maybe<uint64_t> aAdvice) {
-    self->Update(aAdvice, true);
+    self->Update(aAdvice, false);
   };
   auto reject = [](mozilla::ipc::ResponseRejectReason) {};
 
@@ -110,7 +110,7 @@ void Scone::RequestCurrentAdvice() {
 }
 
 void Scone::Update(Maybe<uint64_t> aAdvice, bool aNotify) {
-  if (mShutdown || mThroughputAdvice == aAdvice) {
+  if (mShutdown) {
     return;
   }
 

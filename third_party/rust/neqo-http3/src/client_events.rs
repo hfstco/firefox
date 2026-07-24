@@ -353,9 +353,8 @@ impl Http3ClientEvents {
         self.insert(Http3ClientEvent::ZeroRttRejected);
     }
 
-    /// Add a SCONE update, replacing any update that has not been consumed.
+    /// Add a SCONE update.
     pub(crate) fn scone_updated(&self, bitrate: Option<NonZeroU64>) {
-        self.remove(|evt| matches!(evt, Http3ClientEvent::SconeUpdated(_)));
         self.insert(Http3ClientEvent::SconeUpdated(bitrate));
     }
 
@@ -478,11 +477,20 @@ mod tests {
     }
 
     #[test]
-    fn scone_updates_are_coalesced() {
+    fn scone_updates_are_queued() {
         let mut events = Http3ClientEvents::default();
+        events.scone_updated(NonZeroU64::new(100_000));
         events.scone_updated(NonZeroU64::new(100_000));
         events.scone_updated(NonZeroU64::new(1_000_000));
 
+        assert_eq!(
+            events.next_event(),
+            Some(Http3ClientEvent::SconeUpdated(NonZeroU64::new(100_000)))
+        );
+        assert_eq!(
+            events.next_event(),
+            Some(Http3ClientEvent::SconeUpdated(NonZeroU64::new(100_000)))
+        );
         assert_eq!(
             events.next_event(),
             Some(Http3ClientEvent::SconeUpdated(NonZeroU64::new(1_000_000)))

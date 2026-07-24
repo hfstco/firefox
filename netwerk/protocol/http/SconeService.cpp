@@ -19,9 +19,6 @@ static Maybe<uint64_t> sSconeThroughputAdvice MOZ_GUARDED_BY(sSconeMutex);
 void SetGlobalSconeThroughputAdvice(Maybe<uint64_t> aAdvice) {
   {
     StaticMutexAutoLock lock(sSconeMutex);
-    if (sSconeThroughputAdvice == aAdvice) {
-      return;
-    }
     sSconeThroughputAdvice = aAdvice;
   }
 

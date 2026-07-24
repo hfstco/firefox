@@ -678,8 +678,14 @@ impl Path {
     }
 
     /// Apply updated SCONE information to this path.
-    /// Return a bitrate signal if this was updated AND on the primary path.
-    pub fn update_scone(&mut self, now: Instant, signal: Option<Bitrate>) -> Option<Bitrate> {
+    /// Return the effective bitrate if a signal was received or the advice
+    /// expired, and this is the primary path.
+    pub fn update_scone(
+        &mut self,
+        now: Instant,
+        signal: Option<Bitrate>,
+    ) -> Option<Option<Bitrate>> {
+        let signal_received = signal.is_some();
         let updated = if let Some(s) = &mut self.scone {
             s.update(now, signal)
         } else if let Some(rate) = signal
@@ -690,8 +696,8 @@ impl Path {
         } else {
             false
         };
-        if updated && self.is_primary() {
-            self.scone.as_ref().map(Scone::rate)
+        if (signal_received || updated) && self.is_primary() {
+            Some(self.scone.as_ref().map(Scone::rate))
         } else {
             None
         }
