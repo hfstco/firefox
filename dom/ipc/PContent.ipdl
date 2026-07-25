@@ -621,6 +621,11 @@ child:
       Endpoint<PRemoteMediaManagerChild> video,
       uint32_t[] namespaces);
 
+parent:
+    async RegisterSconeConnection(uint64_t connectionId);
+    async UnregisterSconeConnection(uint64_t connectionId);
+
+child:
     async NetworkLinkTypeChange(uint32_t type);
     async SconeThroughputAdviceChanged(uint64_t connectionId,
                                        uint64_t? bitrate);

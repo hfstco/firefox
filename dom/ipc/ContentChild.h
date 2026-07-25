@@ -24,6 +24,7 @@
 #include "nsRefPtrHashtable.h"
 #include "nsString.h"
 #include "nsTArrayForwardDeclare.h"
+#include "nsTHashMap.h"
 #include "nsTHashSet.h"
 #include "nscore.h"
 
@@ -449,6 +450,8 @@ class ContentChild final : public PContentChild,
       nsTArray<ScreenDetails>&& aScreens);
 
   mozilla::ipc::IPCResult RecvNetworkLinkTypeChange(const uint32_t& aType);
+  void RegisterSconeConnection(uint64_t aConnectionId);
+  void UnregisterSconeConnection(uint64_t aConnectionId);
   mozilla::ipc::IPCResult RecvSconeThroughputAdviceChanged(
       const uint64_t& aConnectionId, const Maybe<uint64_t>& aAdvice);
   uint32_t NetworkLinkType() const { return mNetworkLinkType; }
@@ -942,6 +945,7 @@ class ContentChild final : public PContentChild,
 #endif
 
   uint32_t mNetworkLinkType = 0;
+  nsTHashMap<uint64_t, uint32_t> mSconeConnectionRefCounts;
 
   // See `BrowsingContext::mEpochs` for an explanation of this field.
   uint64_t mBrowsingContextFieldEpoch = 0;

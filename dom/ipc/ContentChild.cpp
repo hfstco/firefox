@@ -2061,6 +2061,34 @@ mozilla::ipc::IPCResult ContentChild::RecvNetworkLinkTypeChange(
   return IPC_OK();
 }
 
+void ContentChild::RegisterSconeConnection(uint64_t aConnectionId) {
+  MOZ_ASSERT(NS_IsMainThread());
+
+  uint32_t& count =
+      mSconeConnectionRefCounts.LookupOrInsert(aConnectionId, 0);
+  if (++count == 1 && CanSend()) {
+    (void)SendRegisterSconeConnection(aConnectionId);
+  }
+}
+
+void ContentChild::UnregisterSconeConnection(uint64_t aConnectionId) {
+  MOZ_ASSERT(NS_IsMainThread());
+
+  auto entry = mSconeConnectionRefCounts.Lookup(aConnectionId);
+  MOZ_ASSERT(entry);
+  if (!entry) {
+    return;
+  }
+
+  if (--entry.Data() == 0) {
+    entry.Remove();
+    net::SetSconeThroughputAdvice(aConnectionId, Nothing());
+    if (CanSend()) {
+      (void)SendUnregisterSconeConnection(aConnectionId);
+    }
+  }
+}
+
 mozilla::ipc::IPCResult ContentChild::RecvSconeThroughputAdviceChanged(
     const uint64_t& aConnectionId, const Maybe<uint64_t>& aAdvice) {
   net::SetSconeThroughputAdvice(aConnectionId, aAdvice);

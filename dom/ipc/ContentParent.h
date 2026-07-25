@@ -942,6 +942,11 @@ class ContentParent final : public PContentParent,
   mozilla::ipc::IPCResult RecvUpdateScriptCacheEverHitTelemetry(
       const uint64_t& aChildId, const uint32_t& aRate);
 
+  mozilla::ipc::IPCResult RecvRegisterSconeConnection(
+      const uint64_t& aConnectionId);
+  mozilla::ipc::IPCResult RecvUnregisterSconeConnection(
+      const uint64_t& aConnectionId);
+
   already_AddRefed<PExternalHelperAppParent> AllocPExternalHelperAppParent(
       nsIURI* aUri, const mozilla::net::LoadInfoArgs& aLoadInfoArgs,
       const nsACString& aMimeContentType, const nsACString& aContentDisposition,
@@ -1586,6 +1591,7 @@ class ContentParent final : public PContentParent,
 #endif
 
   nsTArray<nsCOMPtr<nsIObserver>> mIdleListeners;
+  nsTHashSet<uint64_t> mSconeConnectionIds;
 
 #ifdef MOZ_X11
   // Dup of child's X socket, used to scope its resources to this
