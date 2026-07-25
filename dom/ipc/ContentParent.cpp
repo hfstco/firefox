@@ -4129,7 +4129,7 @@ ContentParent::Observe(nsISupports* aSubject, const char* aTopic,
   } else if (!strcmp(aTopic, net::kSconeThroughputAdviceChangedTopic)) {
     nsresult rv;
     uint64_t connectionId = nsDependentString(aData).ToInteger64(&rv);
-    if (NS_SUCCEEDED(rv)) {
+    if (NS_SUCCEEDED(rv) && mSconeConnectionIds.Contains(connectionId)) {
       (void)SendSconeThroughputAdviceChanged(
           connectionId, net::GetSconeThroughputAdvice(connectionId));
     }
@@ -4683,6 +4683,20 @@ bool ContentParent::DeallocPScriptCacheParent(PScriptCacheParent* cache) {
 mozilla::ipc::IPCResult ContentParent::RecvUpdateScriptCacheEverHitTelemetry(
     const uint64_t& aChildId, const uint32_t& aRate) {
   mozilla::dom::SharedScriptCache::RecvUpdateEverHitTelemetry(aChildId, aRate);
+  return IPC_OK();
+}
+
+mozilla::ipc::IPCResult ContentParent::RecvRegisterSconeConnection(
+    const uint64_t& aConnectionId) {
+  mSconeConnectionIds.EnsureInserted(aConnectionId);
+  (void)SendSconeThroughputAdviceChanged(
+      aConnectionId, net::GetSconeThroughputAdvice(aConnectionId));
+  return IPC_OK();
+}
+
+mozilla::ipc::IPCResult ContentParent::RecvUnregisterSconeConnection(
+    const uint64_t& aConnectionId) {
+  mSconeConnectionIds.Remove(aConnectionId);
   return IPC_OK();
 }
 

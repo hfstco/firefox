@@ -2064,8 +2064,7 @@ mozilla::ipc::IPCResult ContentChild::RecvNetworkLinkTypeChange(
 void ContentChild::RegisterSconeConnection(uint64_t aConnectionId) {
   MOZ_ASSERT(NS_IsMainThread());
 
-  uint32_t& count =
-      mSconeConnectionRefCounts.LookupOrInsert(aConnectionId, 0);
+  uint32_t& count = mSconeConnectionRefCounts.LookupOrInsert(aConnectionId, 0);
   if (++count == 1 && CanSend()) {
     (void)SendRegisterSconeConnection(aConnectionId);
   }
@@ -2091,6 +2090,9 @@ void ContentChild::UnregisterSconeConnection(uint64_t aConnectionId) {
 
 mozilla::ipc::IPCResult ContentChild::RecvSconeThroughputAdviceChanged(
     const uint64_t& aConnectionId, const Maybe<uint64_t>& aAdvice) {
+  if (!mSconeConnectionRefCounts.Contains(aConnectionId)) {
+    return IPC_OK();
+  }
   net::SetSconeThroughputAdvice(aConnectionId, aAdvice);
   return IPC_OK();
 }

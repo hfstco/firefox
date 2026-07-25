@@ -41,6 +41,7 @@ class Scone final : public DOMEventTargetHelper,
 
   const uint64_t mConnectionId;
   Maybe<uint64_t> mThroughputAdvice;
+  bool mRegistered = false;
   bool mShutdown = false;
 };
 

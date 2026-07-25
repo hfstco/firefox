@@ -17116,7 +17116,7 @@
 # experimental Response.scone API.
 - name: network.webtransport.scone.enabled
   type: RelaxedAtomicBool
-  value: true
+  value: false
   mirror: always
   rust: true
 

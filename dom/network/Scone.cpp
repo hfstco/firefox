@@ -5,6 +5,7 @@
 #include "Scone.h"
 
 #include "mozilla/Services.h"
+#include "mozilla/dom/ContentChild.h"
 #include "mozilla/dom/SconeBinding.h"
 #include "mozilla/net/SconeService.h"
 #include "nsIObserverService.h"
@@ -39,6 +40,10 @@ Scone::Scone(nsPIDOMWindowInner* aWindow, uint64_t aConnectionId,
   if (observerService) {
     observerService->AddObserver(this, net::kSconeThroughputAdviceChangedTopic,
                                  true);
+    if (ContentChild* child = ContentChild::GetSingleton()) {
+      child->RegisterSconeConnection(mConnectionId);
+      mRegistered = true;
+    }
   }
 }
 
@@ -68,6 +73,12 @@ void Scone::Shutdown() {
     observerService->RemoveObserver(this,
                                     net::kSconeThroughputAdviceChangedTopic);
   }
+  if (mRegistered) {
+    if (ContentChild* child = ContentChild::GetSingleton()) {
+      child->UnregisterSconeConnection(mConnectionId);
+    }
+    mRegistered = false;
+  }
 }
 
 void Scone::DisconnectFromOwner() {
@@ -88,7 +99,7 @@ NS_IMETHODIMP Scone::Observe(nsISupports* aSubject, const char* aTopic,
 }
 
 void Scone::Update(Maybe<uint64_t> aAdvice, bool aNotify) {
-  if (mShutdown) {
+  if (mShutdown || mThroughputAdvice == aAdvice) {
     return;
   }
 
