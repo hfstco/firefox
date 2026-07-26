@@ -465,8 +465,6 @@ impl EventProvider for Http3ClientEvents {
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
-    use std::num::NonZeroU64;
-
     use neqo_common::event::Provider as _;
 
     use super::{Http3ClientEvent, Http3ClientEvents};
@@ -477,27 +475,5 @@ mod tests {
         assert!(!events.has_events());
         events.insert(Http3ClientEvent::GoawayReceived);
         assert!(events.has_events());
-    }
-
-    #[test]
-    fn scone_updates_are_queued() {
-        let mut events = Http3ClientEvents::default();
-        events.scone_updated(NonZeroU64::new(100_000));
-        events.scone_updated(NonZeroU64::new(100_000));
-        events.scone_updated(NonZeroU64::new(1_000_000));
-
-        assert_eq!(
-            events.next_event(),
-            Some(Http3ClientEvent::SconeUpdated(NonZeroU64::new(100_000)))
-        );
-        assert_eq!(
-            events.next_event(),
-            Some(Http3ClientEvent::SconeUpdated(NonZeroU64::new(100_000)))
-        );
-        assert_eq!(
-            events.next_event(),
-            Some(Http3ClientEvent::SconeUpdated(NonZeroU64::new(1_000_000)))
-        );
-        assert_eq!(events.next_event(), None);
     }
 }

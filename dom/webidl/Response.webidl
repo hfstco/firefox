@@ -51,7 +51,7 @@ partial interface Response {
 // https://datatracker.ietf.org/doc/draft-ietf-scone-protocol/.
 [Exposed=Window]
 partial interface Response {
-  [SameObject, SecureContext, Pref="network.webtransport.scone.enabled"]
+  [SameObject, SecureContext, Pref="network.http.http3.scone.enabled"]
   readonly attribute Scone? scone;
 };
 

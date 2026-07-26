@@ -10,6 +10,7 @@
 #include "nsHashKeys.h"
 #include "nsIObserverService.h"
 #include "nsIXULRuntime.h"
+#include "nsTArray.h"
 #include "nsTHashMap.h"
 #include "nsThreadUtils.h"
 
@@ -18,16 +19,8 @@ namespace mozilla::net {
 static StaticDataMutex<nsTHashMap<nsUint64HashKey, uint64_t>>
     sSconeThroughputAdvice("sSconeThroughputAdvice");
 
-void SetSconeThroughputAdvice(uint64_t aConnectionId, Maybe<uint64_t> aAdvice) {
-  {
-    auto throughputAdvice = sSconeThroughputAdvice.Lock();
-    if (aAdvice) {
-      throughputAdvice->InsertOrUpdate(aConnectionId, *aAdvice);
-    } else {
-      throughputAdvice->Remove(aConnectionId);
-    }
-  }
-
+static void NotifySconeThroughputAdviceChanged(uint64_t aConnectionId,
+                                               Maybe<uint64_t> aAdvice) {
   auto notify = [aConnectionId, aAdvice]() {
     if (XRE_IsSocketProcess()) {
       if (SocketProcessChild* child = SocketProcessChild::GetSingleton()) {
@@ -49,9 +42,29 @@ void SetSconeThroughputAdvice(uint64_t aConnectionId, Maybe<uint64_t> aAdvice) {
   if (NS_IsMainThread()) {
     notify();
   } else {
-    NS_DispatchToMainThread(
-        NS_NewRunnableFunction("SetSconeThroughputAdvice", std::move(notify)));
+    NS_DispatchToMainThread(NS_NewRunnableFunction(
+        "NotifySconeThroughputAdviceChanged", std::move(notify)));
   }
+}
+
+void SetSconeThroughputAdvice(uint64_t aConnectionId, Maybe<uint64_t> aAdvice) {
+  {
+    auto throughputAdvice = sSconeThroughputAdvice.Lock();
+    if (aAdvice) {
+      if (auto entry = throughputAdvice->Lookup(aConnectionId)) {
+        if (entry.Data() == *aAdvice) {
+          return;
+        }
+        entry.Data() = *aAdvice;
+      } else {
+        throughputAdvice->InsertOrUpdate(aConnectionId, *aAdvice);
+      }
+    } else if (!throughputAdvice->Remove(aConnectionId)) {
+      return;
+    }
+  }
+
+  NotifySconeThroughputAdviceChanged(aConnectionId, aAdvice);
 }
 
 Maybe<uint64_t> GetSconeThroughputAdvice(uint64_t aConnectionId) {
@@ -60,6 +73,22 @@ Maybe<uint64_t> GetSconeThroughputAdvice(uint64_t aConnectionId) {
     return Some(entry.Data());
   }
   return Nothing();
+}
+
+void ClearAllSconeThroughputAdvice() {
+  nsTArray<uint64_t> connectionIds;
+  {
+    auto throughputAdvice = sSconeThroughputAdvice.Lock();
+    connectionIds.SetCapacity(throughputAdvice->Count());
+    for (auto iter = throughputAdvice->Iter(); !iter.Done(); iter.Next()) {
+      connectionIds.AppendElement(iter.Key());
+    }
+    throughputAdvice->Clear();
+  }
+
+  for (uint64_t connectionId : connectionIds) {
+    NotifySconeThroughputAdviceChanged(connectionId, Nothing());
+  }
 }
 
 }  // namespace mozilla::net

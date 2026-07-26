@@ -37,11 +37,10 @@ class Scone final : public DOMEventTargetHelper,
  private:
   ~Scone();
 
-  void Update(Maybe<uint64_t> aAdvice, bool aNotify);
+  void Update(Maybe<uint64_t> aAdvice);
 
   const uint64_t mConnectionId;
   Maybe<uint64_t> mThroughputAdvice;
-  bool mRegistered = false;
   bool mShutdown = false;
 };
 

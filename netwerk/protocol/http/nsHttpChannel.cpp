@@ -9361,8 +9361,10 @@ nsHttpChannel::OnStartRequest(nsIRequest* request) {
     RefPtr<nsHttpConnectionInfo> connInfo;
     Maybe<uint64_t> sconeConnectionId;
     Maybe<uint64_t> sconeThroughputAdvice;
-    mResponseHead = mTransaction->TakeResponseHeadAndConnInfo(
-        getter_AddRefs(connInfo), &sconeConnectionId, &sconeThroughputAdvice);
+    mResponseHead =
+        mTransaction->TakeResponseHeadAndConnInfo(getter_AddRefs(connInfo));
+    mTransaction->GetSconeConnectionInfo(sconeConnectionId,
+                                         sconeThroughputAdvice);
     SetSconeConnectionInfo(sconeConnectionId, sconeThroughputAdvice);
     mSupportsHTTP3 = mTransaction->GetSupportsHTTP3();
     // the response head may be null if the transaction was cancelled.  in

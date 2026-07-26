@@ -450,7 +450,7 @@ class ContentChild final : public PContentChild,
       nsTArray<ScreenDetails>&& aScreens);
 
   mozilla::ipc::IPCResult RecvNetworkLinkTypeChange(const uint32_t& aType);
-  void RegisterSconeConnection(uint64_t aConnectionId);
+  bool RegisterSconeConnection(uint64_t aConnectionId);
   void UnregisterSconeConnection(uint64_t aConnectionId);
   mozilla::ipc::IPCResult RecvSconeThroughputAdviceChanged(
       const uint64_t& aConnectionId, const Maybe<uint64_t>& aAdvice);

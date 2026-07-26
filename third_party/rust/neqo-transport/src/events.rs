@@ -174,10 +174,9 @@ impl ConnectionEvents {
         self.remove(|evt| matches!(evt, ConnectionEvent::RecvStreamReadable { stream_id: x } if *x == stream_id.as_u64()));
     }
 
-    pub fn scone_updated(&self, scone: Option<Bitrate>) {
-        self.insert(ConnectionEvent::SconeUpdated(
-            scone.and_then(Option::from),
-        ));
+    pub fn scone_updated(&self, scone: Bitrate) {
+        self.remove(|evt| matches!(evt, ConnectionEvent::SconeUpdated(_)));
+        self.insert(ConnectionEvent::SconeUpdated(Option::from(scone)));
     }
 
     pub fn add_datagram(&self, data: &[u8]) {
@@ -248,26 +247,7 @@ impl EventProvider for ConnectionEvents {
 mod tests {
     use neqo_common::event::Provider as _;
 
-    use crate::{
-        CloseReason, ConnectionEvent, ConnectionEvents, Error, State, StreamId, scone::Bitrate,
-    };
-
-    #[test]
-    fn scone_events_are_queued() {
-        let mut events = ConnectionEvents::default();
-        events.scone_updated(Some(Bitrate::UNKNOWN));
-        events.scone_updated(Some(Bitrate::UNKNOWN));
-
-        assert_eq!(
-            events.next_event(),
-            Some(ConnectionEvent::SconeUpdated(None))
-        );
-        assert_eq!(
-            events.next_event(),
-            Some(ConnectionEvent::SconeUpdated(None))
-        );
-        assert_eq!(events.next_event(), None);
-    }
+    use crate::{CloseReason, ConnectionEvent, ConnectionEvents, Error, State, StreamId};
 
     #[test]
     fn event_culling() {

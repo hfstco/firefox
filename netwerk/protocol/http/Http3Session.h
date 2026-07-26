@@ -322,6 +322,7 @@ class Http3Session final : public Http3SessionBase,
  private:
   ~Http3Session();
 
+  void ClearSconeThroughputAdvice();
   void CloseInternal(bool aCallNeqoClose);
   void Shutdown();
 
@@ -505,9 +506,10 @@ class Http3Session final : public Http3SessionBase,
   // PSK ticket is single-use so the retry does a full handshake and the H3
   // server itself should still be reachable.
   bool mHad0RttStream = false;
-  // Current SCONE throughput advice for this QUIC connection, in bits per
-  // second. Nothing means that no current advice is available.
+  // Identifier used to associate responses with this HTTP/3 connection.
   const uint64_t mSconeConnectionId;
+  // Current SCONE throughput advice for this connection, in bits per second.
+  // Nothing means that no current advice is available.
   Maybe<uint64_t> mSconeThroughputAdvice;
   // The lifetime of the UDP socket is managed by the HttpConnectionUDP. This
   // is only used in Http3Session::ProcessOutput. Using raw pointer here to

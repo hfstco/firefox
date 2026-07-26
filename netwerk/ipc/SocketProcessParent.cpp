@@ -79,6 +79,8 @@ mozilla::ipc::IPCResult SocketProcessParent::RecvSconeThroughputAdviceChanged(
 }
 
 void SocketProcessParent::ActorDestroy(ActorDestroyReason aWhy) {
+  ClearAllSconeThroughputAdvice();
+
 #if defined(MOZ_WIDGET_ANDROID)
   nsCOMPtr<nsIEventTarget> launcherThread(ipc::GetIPCLauncher());
   MOZ_ASSERT(launcherThread);

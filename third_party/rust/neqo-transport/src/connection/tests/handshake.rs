@@ -1662,7 +1662,7 @@ fn scone(enable: bool) {
     let server_stats = server.stats();
     let d = send_something(&mut client, now);
     server.process_input(add_scone(&d, 0x7f), now);
-    assert!(server.events().any(got_scone));
+    assert!(!server.events().any(got_scone), "no event for unknown");
     let d = send_something(&mut server, now);
     client.process_input(add_scone(&d, 0x31), now);
     assert!(client.events().any(got_scone));
@@ -1677,20 +1677,20 @@ fn scone(enable: bool) {
     client.process_input(add_scone(&d, 0x2), now);
     assert!(!client.events().any(got_scone));
 
-    // A repeated signal generates another event.
+    // A repeated signal means no event.
     let d = send_something(&mut server, now);
     client.process_input(add_scone(&d, 0x31), now);
-    assert!(client.events().any(got_scone));
+    assert!(!client.events().any(got_scone));
 
-    // A noop signal generates an event.
+    // A noop signal means no event.
     let d = send_something(&mut server, now);
     client.process_input(add_scone(&d, 0x7f), now);
-    assert!(client.events().any(got_scone));
+    assert!(!client.events().any(got_scone));
 
-    // A higher signal generates an event with the unchanged effective rate.
+    // A higher signal means no event.
     let d = send_something(&mut server, now);
     client.process_input(add_scone(&d, 0x42), now);
-    assert!(client.events().any(got_scone));
+    assert!(!client.events().any(got_scone));
 
     // A lower signal generates an event.
     let d = send_something(&mut server, now);
@@ -1710,10 +1710,10 @@ fn scone(enable: bool) {
     client.process_input(d, now);
     assert!(client.events().any(got_scone));
 
-    // A SCONE packet with unknown rate generates another event.
+    // No event when a SCONE packet with unknown rate is immediately received.
     let d = send_something(&mut server, now);
     client.process_input(add_scone(&d, 0x7f), now);
-    assert!(client.events().any(got_scone));
+    assert!(!client.events().any(got_scone));
 }
 
 #[test]

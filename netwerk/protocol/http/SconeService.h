@@ -16,6 +16,7 @@ inline constexpr char kSconeThroughputAdviceChangedTopic[] =
 
 void SetSconeThroughputAdvice(uint64_t aConnectionId, Maybe<uint64_t> aAdvice);
 Maybe<uint64_t> GetSconeThroughputAdvice(uint64_t aConnectionId);
+void ClearAllSconeThroughputAdvice();
 
 }  // namespace mozilla::net
 

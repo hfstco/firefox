@@ -485,8 +485,7 @@ void nsHttpTransaction::SetH2WSConnRefTaken() {
 }
 
 UniquePtr<nsHttpResponseHead> nsHttpTransaction::TakeResponseHeadAndConnInfo(
-    nsHttpConnectionInfo** aOut, Maybe<uint64_t>* aSconeConnectionId,
-    Maybe<uint64_t>* aSconeThroughputAdvice) {
+    nsHttpConnectionInfo** aOut) {
   MOZ_ASSERT(!mResponseHeadTaken, "TakeResponseHead called 2x");
 
   // Lock TakeResponseHead() against main thread
@@ -495,12 +494,6 @@ UniquePtr<nsHttpResponseHead> nsHttpTransaction::TakeResponseHeadAndConnInfo(
   if (aOut) {
     RefPtr<nsHttpConnectionInfo> connInfo = mFinalizedConnInfo;
     connInfo.forget(aOut);
-  }
-  if (aSconeConnectionId) {
-    *aSconeConnectionId = mSconeConnectionId;
-  }
-  if (aSconeThroughputAdvice) {
-    *aSconeThroughputAdvice = mSconeThroughputAdvice;
   }
 
   mResponseHeadTaken = true;
@@ -513,6 +506,14 @@ UniquePtr<nsHttpResponseHead> nsHttpTransaction::TakeResponseHeadAndConnInfo(
   }
 
   return WrapUnique(std::exchange(mResponseHead, nullptr));
+}
+
+void nsHttpTransaction::GetSconeConnectionInfo(
+    Maybe<uint64_t>& aSconeConnectionId,
+    Maybe<uint64_t>& aSconeThroughputAdvice) {
+  MutexAutoLock lock(mLock);
+  aSconeConnectionId = mSconeConnectionId;
+  aSconeThroughputAdvice = mSconeThroughputAdvice;
 }
 
 UniquePtr<nsHttpHeaderArray> nsHttpTransaction::TakeResponseTrailers() {

@@ -179,8 +179,7 @@ nsresult HttpTransactionParent::AsyncRead(nsIStreamListener* listener,
 
 UniquePtr<nsHttpResponseHead>
 HttpTransactionParent::TakeResponseHeadAndConnInfo(
-    nsHttpConnectionInfo** aOut, Maybe<uint64_t>* aSconeConnectionId,
-    Maybe<uint64_t>* aSconeThroughputAdvice) {
+    nsHttpConnectionInfo** aOut) {
   MOZ_ASSERT(NS_IsMainThread());
   MOZ_ASSERT(!mResponseHeadTaken, "TakeResponseHead called 2x");
 
@@ -188,15 +187,17 @@ HttpTransactionParent::TakeResponseHeadAndConnInfo(
     RefPtr<nsHttpConnectionInfo> connInfo = mConnInfo;
     connInfo.forget(aOut);
   }
-  if (aSconeConnectionId) {
-    *aSconeConnectionId = mSconeConnectionId;
-  }
-  if (aSconeThroughputAdvice) {
-    *aSconeThroughputAdvice = mSconeThroughputAdvice;
-  }
 
   mResponseHeadTaken = true;
   return std::move(mResponseHead);
+}
+
+void HttpTransactionParent::GetSconeConnectionInfo(
+    Maybe<uint64_t>& aSconeConnectionId,
+    Maybe<uint64_t>& aSconeThroughputAdvice) {
+  MOZ_ASSERT(NS_IsMainThread());
+  aSconeConnectionId = mSconeConnectionId;
+  aSconeThroughputAdvice = mSconeThroughputAdvice;
 }
 
 UniquePtr<nsHttpHeaderArray> HttpTransactionParent::TakeResponseTrailers() {

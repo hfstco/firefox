@@ -106,8 +106,11 @@ class HttpTransactionShell : public nsISupports {
   // Called to take ownership of the response headers; the transaction
   // will drop any reference to the response headers after this call.
   virtual UniquePtr<nsHttpResponseHead> TakeResponseHeadAndConnInfo(
-      nsHttpConnectionInfo** aOut, Maybe<uint64_t>* aSconeConnectionId,
-      Maybe<uint64_t>* aSconeThroughputAdvice) = 0;
+      nsHttpConnectionInfo** aOut) = 0;
+
+  virtual void GetSconeConnectionInfo(
+      Maybe<uint64_t>& aSconeConnectionId,
+      Maybe<uint64_t>& aSconeThroughputAdvice) = 0;
 
   // Called to take ownership of the trailer headers.
   // Returning null if there is no trailer.
@@ -203,8 +206,10 @@ class HttpTransactionShell : public nsISupports {
   virtual nsresult AsyncRead(nsIStreamListener* listener, nsIRequest** pump)   \
       override;                                                                \
   virtual UniquePtr<nsHttpResponseHead> TakeResponseHeadAndConnInfo(           \
-      nsHttpConnectionInfo** aOut, Maybe<uint64_t>* aSconeConnectionId,        \
-      Maybe<uint64_t>* aSconeThroughputAdvice) override;                       \
+      nsHttpConnectionInfo** aOut) override;                                   \
+  virtual void GetSconeConnectionInfo(Maybe<uint64_t>& aSconeConnectionId,     \
+                                      Maybe<uint64_t>& aSconeThroughputAdvice) \
+      override;                                                                \
   virtual UniquePtr<nsHttpHeaderArray> TakeResponseTrailers() override;        \
   virtual already_AddRefed<nsITransportSecurityInfo> SecurityInfo() override;  \
   virtual void SetSecurityCallbacks(nsIInterfaceRequestor* aCallbacks)         \

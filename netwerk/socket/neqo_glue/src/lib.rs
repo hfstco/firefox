@@ -483,7 +483,7 @@ impl NeqoHttp3Conn {
             .max_stream_data(StreamType::BiDi, false, max_stream_data)
             .grease(static_prefs::pref!("security.tls.grease_http3_enable"))
             .sni_slicing(static_prefs::pref!("network.http.http3.sni-slicing"))
-            .scone(static_prefs::pref!("network.webtransport.scone.enabled"))
+            .scone(static_prefs::pref!("network.http.http3.scone.enabled"))
             .idle_timeout(Duration::from_secs(idle_timeout.into()))
             // Disabled on OpenBSD. See <https://bugzilla.mozilla.org/show_bug.cgi?id=1952304>.
             .pmtud_iface_mtu(cfg!(not(target_os = "openbsd")))

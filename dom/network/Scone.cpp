@@ -5,7 +5,6 @@
 #include "Scone.h"
 
 #include "mozilla/Services.h"
-#include "mozilla/dom/ContentChild.h"
 #include "mozilla/dom/SconeBinding.h"
 #include "mozilla/net/SconeService.h"
 #include "nsIObserverService.h"
@@ -40,10 +39,6 @@ Scone::Scone(nsPIDOMWindowInner* aWindow, uint64_t aConnectionId,
   if (observerService) {
     observerService->AddObserver(this, net::kSconeThroughputAdviceChangedTopic,
                                  true);
-    if (ContentChild* child = ContentChild::GetSingleton()) {
-      child->RegisterSconeConnection(mConnectionId);
-      mRegistered = true;
-    }
   }
 }
 
@@ -73,12 +68,6 @@ void Scone::Shutdown() {
     observerService->RemoveObserver(this,
                                     net::kSconeThroughputAdviceChangedTopic);
   }
-  if (mRegistered) {
-    if (ContentChild* child = ContentChild::GetSingleton()) {
-      child->UnregisterSconeConnection(mConnectionId);
-    }
-    mRegistered = false;
-  }
 }
 
 void Scone::DisconnectFromOwner() {
@@ -92,21 +81,19 @@ NS_IMETHODIMP Scone::Observe(nsISupports* aSubject, const char* aTopic,
     nsresult rv;
     uint64_t connectionId = nsDependentString(aData).ToInteger64(&rv);
     if (NS_SUCCEEDED(rv) && connectionId == mConnectionId) {
-      Update(net::GetSconeThroughputAdvice(mConnectionId), true);
+      Update(net::GetSconeThroughputAdvice(mConnectionId));
     }
   }
   return NS_OK;
 }
 
-void Scone::Update(Maybe<uint64_t> aAdvice, bool aNotify) {
+void Scone::Update(Maybe<uint64_t> aAdvice) {
   if (mShutdown || mThroughputAdvice == aAdvice) {
     return;
   }
 
   mThroughputAdvice = aAdvice;
-  if (aNotify) {
-    DispatchTrustedEvent(u"change"_ns);
-  }
+  DispatchTrustedEvent(u"change"_ns);
 }
 
 }  // namespace mozilla::dom::network

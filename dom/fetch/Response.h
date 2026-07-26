@@ -7,6 +7,7 @@
 
 #include "InternalHeaders.h"
 #include "InternalResponse.h"
+#include "mozilla/Maybe.h"
 #include "mozilla/dom/Fetch.h"
 #include "mozilla/dom/ResponseBinding.h"
 #include "nsISupportsImpl.h"
@@ -142,6 +143,9 @@ class Response final : public FetchBody<Response>, public nsWrapperCache {
   }
 
  private:
+  void RegisterSconeConnection();
+  void ShutdownScone();
+
   static already_AddRefed<Response> CreateAndInitializeAResponse(
       const GlobalObject& aGlobal,
       const Nullable<fetch::ResponseBodyInit>& aBody,
@@ -154,6 +158,7 @@ class Response final : public FetchBody<Response>, public nsWrapperCache {
   // Lazily created
   RefPtr<Headers> mHeaders;
   RefPtr<network::Scone> mScone;
+  Maybe<uint64_t> mRegisteredSconeConnectionId;
   RefPtr<AbortSignalImpl> mSignalImpl;
 };
 

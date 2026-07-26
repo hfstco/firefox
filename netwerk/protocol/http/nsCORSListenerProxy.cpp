@@ -712,10 +712,6 @@ nsresult nsCORSListenerProxy::CheckRequestApproved(nsIRequest* aRequest) {
   nsCOMPtr<nsIHttpChannel> topChannel;
   topChannel.swap(mHttpChannel);
 
-  if (StaticPrefs::content_cors_allow_all()) {
-    return NS_OK;
-  }
-
   if (StaticPrefs::content_cors_disable()) {
     LogBlockedRequest(aRequest, "CORSDisabled", nullptr,
                       nsILoadInfo::BLOCKING_REASON_CORSDISABLED, topChannel);
@@ -1714,11 +1710,6 @@ nsresult nsCORSListenerProxy::StartCORSPreflight(
     nsIChannel* aRequestChannel, nsICorsPreflightCallback* aCallback,
     nsTArray<nsCString>& aUnsafeHeaders, nsIChannel** aPreflightChannel) {
   *aPreflightChannel = nullptr;
-
-  if (StaticPrefs::content_cors_allow_all()) {
-    aCallback->OnPreflightSucceeded();
-    return NS_OK;
-  }
 
   if (StaticPrefs::content_cors_disable()) {
     nsCOMPtr<nsIHttpChannel> http = do_QueryInterface(aRequestChannel);

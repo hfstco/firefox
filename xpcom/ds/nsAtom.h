@@ -38,12 +38,9 @@ class nsAtom {
   // Returns true if ToLowercaseASCII would return the string unchanged.
   static constexpr bool ComputeIsAsciiLowercase(const char16_t* aString,
                                                 const uint32_t aLength) {
-    for (uint32_t i = 0; i < aLength; ++i) {
-      if (mozilla::IsAsciiUppercaseAlpha(aString[i])) {
-        return false;
-      }
-    }
-    return true;
+    return std::all_of(aString, aString + aLength, [](char16_t c) {
+      return !mozilla::IsAsciiUppercaseAlpha(c);
+    });
   }
 
   template <size_t N>

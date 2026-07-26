@@ -988,8 +988,8 @@ TRRServiceChannel::OnStartRequest(nsIRequest* request) {
     // all of the response headers have been acquired, so we can take
     // ownership of them from the transaction.
     RefPtr<nsHttpConnectionInfo> connInfo;
-    mResponseHead = mTransaction->TakeResponseHeadAndConnInfo(
-        getter_AddRefs(connInfo), nullptr, nullptr);
+    mResponseHead =
+        mTransaction->TakeResponseHeadAndConnInfo(getter_AddRefs(connInfo));
     if (mResponseHead) {
       uint32_t httpStatus = mResponseHead->Status();
       if (mTransaction->ProxyConnectFailed()) {

@@ -441,6 +441,7 @@ void Http3Session::Shutdown() {
 
 Http3Session::~Http3Session() {
   LOG3(("Http3Session::~Http3Session %p", this));
+  ClearSconeThroughputAdvice();
 #ifndef ANDROID
   EchOutcomeTelemetry();
 #endif
@@ -2176,7 +2177,7 @@ void Http3Session::CloseInternal(bool aCallNeqoClose) {
   }
 
   LOG(("Http3Session::Closing [this=%p]", this));
-  SetSconeThroughputAdvice(mSconeConnectionId, Nothing());
+  ClearSconeThroughputAdvice();
 
   // A clean pre-CONNECTED shutdown closes with a success code; only flag a
   // before-connected error when mError actually failed.
@@ -2198,6 +2199,13 @@ void Http3Session::CloseInternal(bool aCallNeqoClose) {
 
   mStreamIdHash.Clear();
   mStreamTransactionHash.Clear();
+}
+
+void Http3Session::ClearSconeThroughputAdvice() {
+  if (mSconeThroughputAdvice.isSome()) {
+    SetSconeThroughputAdvice(mSconeConnectionId, Nothing());
+    mSconeThroughputAdvice.reset();
+  }
 }
 
 nsHttpConnectionInfo* Http3Session::ConnectionInfo() {

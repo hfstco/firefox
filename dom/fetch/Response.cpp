@@ -10,6 +10,8 @@
 #include "mozilla/BasePrincipal.h"
 #include "mozilla/ErrorResult.h"
 #include "mozilla/HoldDropJSObjects.h"
+#include "mozilla/StaticPrefs_network.h"
+#include "mozilla/dom/ContentChild.h"
 #include "mozilla/dom/Document.h"
 #include "mozilla/dom/FetchBinding.h"
 #include "mozilla/dom/Headers.h"
@@ -19,6 +21,7 @@
 #include "mozilla/dom/URL.h"
 #include "mozilla/dom/WorkerPrivate.h"
 #include "mozilla/dom/network/Scone.h"
+#include "mozilla/net/SconeService.h"
 #include "nsDOMString.h"
 #include "nsISupportsImpl.h"
 #include "nsIURI.h"
@@ -35,10 +38,8 @@ NS_IMPL_CYCLE_COLLECTION_CLASS(Response)
 NS_IMPL_CYCLE_COLLECTION_UNLINK_BEGIN_INHERITED(Response, FetchBody<Response>)
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mGlobal)
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mHeaders)
-  if (tmp->mScone) {
-    tmp->mScone->Shutdown();
-    tmp->mScone = nullptr;
-  }
+  tmp->ShutdownScone();
+  NS_IMPL_CYCLE_COLLECTION_UNLINK(mScone)
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mSignalImpl)
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mFetchStreamReader)
   NS_IMPL_CYCLE_COLLECTION_UNLINK_PRESERVED_WRAPPER
@@ -70,10 +71,50 @@ Response::Response(nsIGlobalObject* aGlobal,
       mInternalResponse->Headers()->Guard() == HeadersGuardEnum::Immutable ||
       mInternalResponse->Headers()->Guard() == HeadersGuardEnum::Response);
 
+  RegisterSconeConnection();
+
   mozilla::HoldJSObjects(this);
 }
 
-Response::~Response() { mozilla::DropJSObjects(this); }
+Response::~Response() {
+  ShutdownScone();
+  mozilla::DropJSObjects(this);
+}
+
+void Response::RegisterSconeConnection() {
+  if (!NS_IsMainThread() || !StaticPrefs::network_http_http3_scone_enabled()) {
+    return;
+  }
+
+  nsCOMPtr<nsPIDOMWindowInner> window = do_QueryInterface(mGlobal);
+  ContentChild* child = ContentChild::GetSingleton();
+  if (!window || !child) {
+    return;
+  }
+
+  mRegisteredSconeConnectionId = mInternalResponse->GetSconeConnectionId();
+  if (!mRegisteredSconeConnectionId) {
+    return;
+  }
+
+  if (child->RegisterSconeConnection(*mRegisteredSconeConnectionId)) {
+    net::SetSconeThroughputAdvice(
+        *mRegisteredSconeConnectionId,
+        mInternalResponse->GetSconeThroughputAdvice());
+  }
+}
+
+void Response::ShutdownScone() {
+  if (mScone) {
+    mScone->Shutdown();
+  }
+  if (mRegisteredSconeConnectionId) {
+    if (ContentChild* child = ContentChild::GetSingleton()) {
+      child->UnregisterSconeConnection(*mRegisteredSconeConnectionId);
+    }
+    mRegisteredSconeConnectionId.reset();
+  }
+}
 
 /* static */
 already_AddRefed<Response> Response::Error(const GlobalObject& aGlobal) {
@@ -481,7 +522,7 @@ network::Scone* Response::GetScone() {
       return nullptr;
     }
     mScone = new network::Scone(window, *connectionId,
-                                mInternalResponse->GetSconeThroughputAdvice());
+                                net::GetSconeThroughputAdvice(*connectionId));
   }
   return mScone;
 }

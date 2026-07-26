@@ -2398,11 +2398,6 @@
   value: false
   mirror: always
 
-- name: content.cors.allow_all
-  type: bool
-  value: false
-  mirror: always
-
 # If true, we'll use the triggering principal rather than the loading principal
 # when doing CORS checks.  Doing so is generally not correct, but we shipped
 # with this behavior for a long time, so we're leaving it preffable in case
@@ -17114,7 +17109,7 @@
 
 # Enable SCONE throughput advice for HTTP/3 connections and expose the
 # experimental Response.scone API.
-- name: network.webtransport.scone.enabled
+- name: network.http.http3.scone.enabled
   type: RelaxedAtomicBool
   value: false
   mirror: always

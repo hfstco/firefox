@@ -4,7 +4,7 @@
 
 // Experimental, non-standard API. SCONE is defined by
 // https://datatracker.ietf.org/doc/draft-ietf-scone-protocol/.
-[Exposed=Window, SecureContext, Pref="network.webtransport.scone.enabled"]
+[Exposed=Window, SecureContext, Pref="network.http.http3.scone.enabled"]
 interface Scone : EventTarget {
   readonly attribute unsigned long long? throughputAdvice;
   attribute EventHandler onchange;

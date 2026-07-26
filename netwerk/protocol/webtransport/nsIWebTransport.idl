@@ -28,7 +28,7 @@ class WebTransportStreamBase;
 native Datagram(nsTArray<uint8_t>&&);
 [ref] native const_MaybeClientInfoRef(const mozilla::Maybe<mozilla::dom::ClientInfo>);
 
-[builtinclass, scriptable, uuid(827a61a1-cbe5-4bf9-827f-7a2345e1c835)]
+[builtinclass, scriptable, uuid(c20d6e77-8cb1-4838-a88d-fff826080aa3)]
 interface nsIWebTransport : nsISupports {
   cenum WebTransportError : 16 {
     UNKNOWN_ERROR,

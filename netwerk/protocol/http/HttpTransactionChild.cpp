@@ -414,8 +414,10 @@ HttpTransactionChild::OnStartRequest(nsIRequest* aRequest) {
   RefPtr<nsHttpConnectionInfo> connInfo;
   Maybe<uint64_t> sconeConnectionId;
   Maybe<uint64_t> sconeThroughputAdvice;
-  UniquePtr<nsHttpResponseHead> head(mTransaction->TakeResponseHeadAndConnInfo(
-      getter_AddRefs(connInfo), &sconeConnectionId, &sconeThroughputAdvice));
+  UniquePtr<nsHttpResponseHead> head(
+      mTransaction->TakeResponseHeadAndConnInfo(getter_AddRefs(connInfo)));
+  mTransaction->GetSconeConnectionInfo(sconeConnectionId,
+                                       sconeThroughputAdvice);
   Maybe<nsHttpResponseHead> optionalHead;
   nsTArray<uint8_t> dataForSniffer;
   if (head) {

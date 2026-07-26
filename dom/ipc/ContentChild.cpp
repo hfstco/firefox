@@ -2061,13 +2061,15 @@ mozilla::ipc::IPCResult ContentChild::RecvNetworkLinkTypeChange(
   return IPC_OK();
 }
 
-void ContentChild::RegisterSconeConnection(uint64_t aConnectionId) {
+bool ContentChild::RegisterSconeConnection(uint64_t aConnectionId) {
   MOZ_ASSERT(NS_IsMainThread());
 
   uint32_t& count = mSconeConnectionRefCounts.LookupOrInsert(aConnectionId, 0);
-  if (++count == 1 && CanSend()) {
+  const bool firstRegistration = ++count == 1;
+  if (firstRegistration && CanSend()) {
     (void)SendRegisterSconeConnection(aConnectionId);
   }
+  return firstRegistration;
 }
 
 void ContentChild::UnregisterSconeConnection(uint64_t aConnectionId) {
